@@ -182,8 +182,10 @@ export default function App() {
   };
 
   const updateSettingsState = (newSettings: Partial<SystemSettings>) => {
-    const updated = { ...settings, ...newSettings };
-    setSettings(updated);
+    setSettings(prev => {
+      const updated = { ...prev, ...newSettings };
+      return updated;
+    });
     api.settings.update(newSettings).catch(err => console.error('Settings sync error:', err));
   };
 

@@ -7,9 +7,16 @@ const router = Router();
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT id, date, time, type, amount, fee, entered_by AS enteredBy, note, ref_trx AS refTrx FROM bkash_records ORDER BY date DESC, time DESC'
+      'SELECT id, date, time, type, amount, fee, entered_by, note, ref_trx FROM bkash_records ORDER BY date DESC, time DESC'
     );
-    res.json(rows);
+    const mapped = (rows as any[]).map(r => ({
+      id: r.id, date: r.date, time: r.time,
+      type: r.type, amount: Number(r.amount),
+      fee: r.fee != null ? Number(r.fee) : undefined,
+      enteredBy: r.entered_by, note: r.note || '',
+      refTrx: r.ref_trx || undefined,
+    }));
+    res.json(mapped);
   } catch (err) {
     console.error('Get bkash error:', err);
     res.status(500).json({ message: 'সার্ভার ত্রুটি।' });

@@ -16,6 +16,11 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
   });
 
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
+      localStorage.removeItem('authToken');
+      window.location.reload();
+      throw new Error('সেশন মেয়াদ শেষ। পুনরায় লগইন করুন।');
+    }
     const error = await res.json().catch(() => ({ message: 'অনুরোধ ব্যর্থ হয়েছে।' }));
     throw new Error(error.message || 'অনুরোধ ব্যর্থ হয়েছে।');
   }

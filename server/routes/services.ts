@@ -7,9 +7,17 @@ const router = Router();
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT service_key AS serviceKey, bangla, english, color, default_price AS defaultPrice, is_active AS isActive FROM services_metadata ORDER BY sort_order ASC'
+      'SELECT service_key, bangla, english, color, default_price, is_active FROM services_metadata ORDER BY sort_order ASC'
     );
-    res.json(rows);
+    const mapped = (rows as any[]).map(r => ({
+      serviceKey: r.service_key,
+      bangla: r.bangla,
+      english: r.english,
+      color: r.color,
+      defaultPrice: Number(r.default_price),
+      isActive: !!r.is_active,
+    }));
+    res.json(mapped);
   } catch (err) {
     console.error('Get services error:', err);
     res.status(500).json({ message: 'সার্ভার ত্রুটি।' });

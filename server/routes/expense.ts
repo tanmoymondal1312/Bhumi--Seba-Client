@@ -7,9 +7,14 @@ const router = Router();
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const [rows] = await pool.execute(
-      'SELECT id, date, time, category, amount, entered_by AS enteredBy, note FROM expense_records ORDER BY date DESC, time DESC'
+      'SELECT id, date, time, category, amount, entered_by, note FROM expense_records ORDER BY date DESC, time DESC'
     );
-    res.json(rows);
+    const mapped = (rows as any[]).map(r => ({
+      id: r.id, date: r.date, time: r.time,
+      category: r.category, amount: Number(r.amount),
+      enteredBy: r.entered_by, note: r.note || '',
+    }));
+    res.json(mapped);
   } catch (err) {
     console.error('Get expenses error:', err);
     res.status(500).json({ message: 'সার্ভার ত্রুটি।' });
