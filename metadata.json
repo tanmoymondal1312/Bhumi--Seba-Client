@@ -1,0 +1,6 @@
+{
+  "name": "Bhumi Seva Hisab",
+  "description": "Premium, Modern, Colorful Business Accounting & Profit Management App for Bhumi Seva Sahayata Kendra.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
