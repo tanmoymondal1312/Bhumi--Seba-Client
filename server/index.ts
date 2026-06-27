@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { initializeDatabase } from './db';
 
@@ -15,9 +14,6 @@ import servicesRoutes from './routes/services';
 import backupRoutes from './routes/backup';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001');
@@ -36,7 +32,7 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/backup', backupRoutes);
 
 // Serve static frontend files in production
-const distPath = path.join(__dirname, '..', 'dist');
+const distPath = path.join(process.cwd(), 'dist');
 app.use(express.static(distPath));
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api')) {

@@ -5,11 +5,11 @@ await esbuild.build({
   bundle: true,
   platform: 'node',
   target: 'node18',
-  outfile: 'server.js',
+  outfile: 'server.cjs',
   format: 'cjs',
   external: ['mysql2'],
   sourcemap: false,
   minify: true,
 });
 
-console.log('Server bundled to server.js');
+console.log('Server bundled to server.cjs');

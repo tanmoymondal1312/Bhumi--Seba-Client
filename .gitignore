@@ -3,6 +3,7 @@ build/
 dist/
 coverage/
 server.js
+server.cjs
 .DS_Store
 *.log
 .env*

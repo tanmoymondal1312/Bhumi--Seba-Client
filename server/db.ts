@@ -2,13 +2,9 @@ import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -24,7 +20,7 @@ const pool = mysql.createPool({
 export default pool;
 
 export async function initializeDatabase() {
-  const schemaPath = path.join(__dirname, '..', 'db', 'schema.sql');
+  const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
   const statements = schema
