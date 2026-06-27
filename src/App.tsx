@@ -219,13 +219,11 @@ export default function App() {
     try {
       const result = await api.income.create(record);
       const newRecord: IncomeRecord = { ...result.income, amount: Number(result.income.amount) };
-      const updated = [newRecord, ...incomeList];
-      updateIncomeState(updated);
+      setIncomeList(prev => [newRecord, ...prev]);
 
-      // If bKash auto-created, add it to state
       if (result.bkash) {
-        const bkRecord = { ...result.bkash, amount: Number(result.bkash.amount) };
-        updateBkashState([bkRecord, ...bkashList]);
+        const bkRecord: BKashRecord = { ...result.bkash, amount: Number(result.bkash.amount), fee: result.bkash.fee != null ? Number(result.bkash.fee) : undefined };
+        setBkashList(prev => [bkRecord, ...prev]);
       }
     } catch (err) {
       console.error('Add income error:', err);
@@ -236,8 +234,7 @@ export default function App() {
   const handleDeleteIncome = async (id: string) => {
     try {
       await api.income.delete(id);
-      const filtered = incomeList.filter(item => item.id !== id);
-      updateIncomeState(filtered);
+      setIncomeList(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       console.error('Delete income error:', err);
     }
@@ -247,13 +244,7 @@ export default function App() {
   const handleUpdateIncome = async (id: string, updatedFields: Partial<IncomeRecord>) => {
     try {
       await api.income.update(id, updatedFields);
-      const updated = incomeList.map(item => {
-        if (item.id === id) {
-          return { ...item, ...updatedFields };
-        }
-        return item;
-      });
-      updateIncomeState(updated);
+      setIncomeList(prev => prev.map(item => item.id === id ? { ...item, ...updatedFields } : item));
     } catch (err) {
       console.error('Update income error:', err);
     }
@@ -263,8 +254,7 @@ export default function App() {
   const handleAddExpense = async (record: Omit<ExpenseRecord, 'id'>) => {
     try {
       const newRecord = await api.expenses.create(record);
-      const updated = [{ ...newRecord, amount: Number(newRecord.amount) }, ...expenseList];
-      updateExpenseState(updated);
+      setExpenseList(prev => [{ ...newRecord, amount: Number(newRecord.amount) }, ...prev]);
     } catch (err) {
       console.error('Add expense error:', err);
     }
@@ -274,8 +264,7 @@ export default function App() {
   const handleDeleteExpense = async (id: string) => {
     try {
       await api.expenses.delete(id);
-      const filtered = expenseList.filter(item => item.id !== id);
-      updateExpenseState(filtered);
+      setExpenseList(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       console.error('Delete expense error:', err);
     }
@@ -285,8 +274,7 @@ export default function App() {
   const handleAddBkashRecord = async (record: Omit<BKashRecord, 'id'>) => {
     try {
       const newRecord = await api.bkash.create(record);
-      const updated = [{ ...newRecord, amount: Number(newRecord.amount), fee: newRecord.fee != null ? Number(newRecord.fee) : undefined }, ...bkashList];
-      updateBkashState(updated);
+      setBkashList(prev => [{ ...newRecord, amount: Number(newRecord.amount), fee: newRecord.fee != null ? Number(newRecord.fee) : undefined }, ...prev]);
     } catch (err) {
       console.error('Add bkash error:', err);
     }
@@ -296,8 +284,7 @@ export default function App() {
   const handleDeleteBkashRecord = async (id: string) => {
     try {
       await api.bkash.delete(id);
-      const filtered = bkashList.filter(item => item.id !== id);
-      updateBkashState(filtered);
+      setBkashList(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       console.error('Delete bkash error:', err);
     }
@@ -307,8 +294,7 @@ export default function App() {
   const handleUpdateBkashRecord = async (updatedRecord: BKashRecord) => {
     try {
       await api.bkash.update(updatedRecord.id, updatedRecord);
-      const updated = bkashList.map(item => item.id === updatedRecord.id ? updatedRecord : item);
-      updateBkashState(updated);
+      setBkashList(prev => prev.map(item => item.id === updatedRecord.id ? updatedRecord : item));
     } catch (err) {
       console.error('Update bkash error:', err);
     }
@@ -318,7 +304,7 @@ export default function App() {
   const handleAddReminder = async (title: string, date: string) => {
     try {
       const newReminder = await api.reminders.create({ title, date });
-      updateReminderState([{ ...newReminder, isCompleted: false }, ...reminders]);
+      setReminders(prev => [{ ...newReminder, isCompleted: false }, ...prev]);
     } catch (err) {
       console.error('Add reminder error:', err);
     }
@@ -328,8 +314,7 @@ export default function App() {
   const handleDeleteReminder = async (id: string) => {
     try {
       await api.reminders.delete(id);
-      const filtered = reminders.filter(item => item.id !== id);
-      updateReminderState(filtered);
+      setReminders(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       console.error('Delete reminder error:', err);
     }
@@ -339,13 +324,7 @@ export default function App() {
   const handleToggleReminder = async (id: string) => {
     try {
       await api.reminders.toggle(id);
-      const updated = reminders.map(rem => {
-        if (rem.id === id) {
-          return { ...rem, isCompleted: !rem.isCompleted };
-        }
-        return rem;
-      });
-      updateReminderState(updated);
+      setReminders(prev => prev.map(rem => rem.id === id ? { ...rem, isCompleted: !rem.isCompleted } : rem));
     } catch (err) {
       console.error('Toggle reminder error:', err);
     }
