@@ -57,6 +57,31 @@ export default function App() {
   });
 
   const updateServicesMetadata = (newMetadata: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>) => {
+    const oldKeys = Object.keys(servicesMetadata);
+    const newKeys = Object.keys(newMetadata);
+
+    // Detect new services and create them via API
+    for (const key of newKeys) {
+      const meta = newMetadata[key];
+      if (!oldKeys.includes(key)) {
+        api.services.create({ serviceKey: key, bangla: meta.bangla, english: meta.english, color: meta.color, defaultPrice: meta.defaultPrice })
+          .catch(err => console.error('Service create error:', err));
+      } else {
+        const old = servicesMetadata[key];
+        if (old.defaultPrice !== meta.defaultPrice || old.bangla !== meta.bangla || old.english !== meta.english || old.color !== meta.color) {
+          api.services.update(key, { bangla: meta.bangla, english: meta.english, color: meta.color, defaultPrice: meta.defaultPrice })
+            .catch(err => console.error('Service update error:', err));
+        }
+      }
+    }
+
+    // Detect deleted services
+    for (const key of oldKeys) {
+      if (!newKeys.includes(key)) {
+        api.services.delete(key).catch(err => console.error('Service delete error:', err));
+      }
+    }
+
     setServicesMetadata(newMetadata);
   };
 
