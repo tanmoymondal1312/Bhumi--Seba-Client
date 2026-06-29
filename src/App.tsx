@@ -675,6 +675,23 @@ export default function App() {
         </div>
       </footer>
 
+      {/* MEDIAGHOR CREDIT FOOTER */}
+      <div className={`hidden md:block text-center py-3 ${isDarkMode ? 'border-slate-800/50' : 'border-slate-200'}`}>
+        <a
+          href="https://mediaghor.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center space-x-1.5 text-[10px] text-slate-500 hover:text-slate-300 transition group"
+        >
+          <img
+            src="https://mediaghor.com/static/favicon/favicon-96x96.png"
+            alt="Mediaghor"
+            className="w-3.5 h-3.5 rounded-sm opacity-50 group-hover:opacity-100 transition"
+          />
+          <span>Made with <strong className="text-slate-400 group-hover:text-slate-200">Mediaghor</strong></span>
+        </a>
+      </div>
+
     </div>
   );
 }

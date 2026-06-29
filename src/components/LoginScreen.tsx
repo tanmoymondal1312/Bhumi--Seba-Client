@@ -248,8 +248,23 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         </div>
       </div>
 
-      <div className="mt-8 text-center text-slate-500 text-[11px] font-medium leading-relaxed tracking-wide select-none">
-        ভূমি সেবা সহায়তা কেন্দ্র © ২০২৬
+      <div className="mt-8 text-center select-none space-y-2">
+        <div className="text-slate-500 text-[11px] font-medium tracking-wide">
+          ভূমি সেবা সহায়তা কেন্দ্র © ২০২৬
+        </div>
+        <a
+          href="https://mediaghor.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center space-x-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition group"
+        >
+          <img
+            src="https://mediaghor.com/static/favicon/favicon-96x96.png"
+            alt="Mediaghor"
+            className="w-3.5 h-3.5 rounded-sm opacity-40 group-hover:opacity-80 transition"
+          />
+          <span>Made with <strong className="text-slate-500 group-hover:text-slate-300">Mediaghor</strong></span>
+        </a>
       </div>
     </div>
   );
