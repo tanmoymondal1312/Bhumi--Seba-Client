@@ -1,0 +1,10 @@
+/* TEAM */
+Developer: Mediaghor
+Site: https://mediaghor.com
+Location: Bangladesh
+
+/* SITE */
+Name: ভূমি সেবা হিসাব (Bhumi Seva Hisab)
+Description: Professional shop management and accounting software for land service centers
+Built with: React, TypeScript, Node.js, Express, MySQL
+Designed and Developed by: Mediaghor (https://mediaghor.com)
