@@ -16,7 +16,7 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
   });
 
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/auth/login') && !path.startsWith('/auth/register')) {
+    if (res.status === 401 && !path.startsWith('/auth/login')) {
       localStorage.removeItem('authToken');
       window.location.reload();
       throw new Error('সেশন মেয়াদ শেষ। পুনরায় লগইন করুন।');
@@ -30,20 +30,33 @@ async function request<T = any>(path: string, options?: RequestInit): Promise<T>
 
 export const api = {
   auth: {
-    login: (pin: string, role: string) =>
+    usersList: () =>
+      request<any[]>('/auth/users-list'),
+    login: (userId: string, pin: string) =>
       request<{ token: string; user: any }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ pin, role }),
-      }),
-    register: (data: { name: string; phone?: string; pin: string; role: string }) =>
-      request<{ token: string; user: any }>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(data),
+        body: JSON.stringify({ userId, pin }),
       }),
     logout: () =>
       request('/auth/logout', { method: 'POST' }),
     me: () =>
       request<{ user: any }>('/auth/me'),
+  },
+
+  users: {
+    getAll: () => request<any[]>('/users'),
+    create: (data: { name: string; role: string; pin: string; phone?: string; avatar?: string }) =>
+      request('/users', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: { name?: string; role?: string; pin?: string; phone?: string; avatar?: string }) =>
+      request(`/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request(`/users/${id}`, { method: 'DELETE' }),
   },
 
   income: {

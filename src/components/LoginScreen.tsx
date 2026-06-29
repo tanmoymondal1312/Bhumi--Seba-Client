@@ -1,130 +1,92 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState } from 'react';
-import { ROLE_METADATA } from '../data/mockData';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
 import { api } from '../api/client';
 import {
-  ShieldCheck, Eye, EyeOff, Fingerprint, Key,
-  ChevronRight, Home, HelpCircle, UserPlus,
-  UserCheck, Store, Lock, CheckCircle2
+  ShieldCheck, Eye, EyeOff, Key,
+  ChevronLeft, Store, CheckCircle2, Users, UserCheck
 } from 'lucide-react';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
 }
 
-export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
-  // Tabs active state
-  const [activeTab, setActiveTab2] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+interface UserListItem {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  phone: string;
+}
 
-  // Input states
-  const [usernameInput, setUsernameInput] = useState<string>('');
-  const [emailInput, setEmailInput] = useState<string>('');
+export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
+  const [usersList, setUsersList] = useState<UserListItem[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
   const [pinInput, setPinInput] = useState<string>('');
   const [showPin, setShowPin] = useState<boolean>(false);
-  const [selectedRole, setSelectedRole] = useState<'OWNER' | 'STAFF'>('OWNER');
-
-  // Notification and simulation states
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<string>('');
-  const [isBioScanning, setIsBioScanning] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Submit handler for login / registration
+  useEffect(() => {
+    api.auth.usersList()
+      .then(users => {
+        setUsersList(users);
+        if (users.length === 1) {
+          setSelectedUser(users[0]);
+        }
+      })
+      .catch(() => setErrorMsg('সার্ভারের সাথে সংযোগ করা যাচ্ছে না।'))
+      .finally(() => setIsLoading(false));
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
+    if (!selectedUser) {
+      setErrorMsg('অনুগ্রহ করে আপনার অ্যাকাউন্ট নির্বাচন করুন।');
+      return;
+    }
+
+    const cleanPin = pinInput.trim();
+    if (!cleanPin) {
+      setErrorMsg('অনুগ্রহ করে আপনার পিন দিন।');
+      return;
+    }
+
     if (isSubmitting) return;
     setIsSubmitting(true);
 
     try {
-      if (activeTab === 'LOGIN') {
-        const cleanPin = pinInput.trim();
-        if (!cleanPin) {
-          setErrorMsg('অনুগ্রহ করে আপনার পিন নম্বর দিন।');
-          setIsSubmitting(false);
-          return;
-        }
-
-        const result = await api.auth.login(cleanPin, selectedRole);
-        localStorage.setItem('authToken', result.token);
-
-        setSuccessMsg(`${result.user.name} হিসেবে সফলভাবে লগইন করা হয়েছে!`);
-        setTimeout(() => {
-          onLoginSuccess(result.user);
-        }, 800);
-      } else {
-        // REGISTER SCREEN SUBMIT
-        const name = usernameInput.trim();
-        const email = emailInput.trim();
-        const pass = pinInput.trim();
-
-        if (!name) {
-          setErrorMsg('অনুগ্রহ করে আপনার নাম টাইপ করুন।');
-          setIsSubmitting(false);
-          return;
-        }
-        if (!pass) {
-          setErrorMsg('নিরাপত্তার জন্য পাসওয়ার্ড বা পিন দেওয়া আবশ্যক।');
-          setIsSubmitting(false);
-          return;
-        }
-
-        const result = await api.auth.register({
-          name,
-          phone: email || undefined,
-          pin: pass,
-          role: selectedRole,
-        });
-        localStorage.setItem('authToken', result.token);
-
-        setSuccessMsg(`সফলভাবে অ্যাকাউন্ট তৈরি হয়েছে! "${name}" হিসেবে সিস্টেমে প্রবেশ করা হচ্ছে...`);
-
-        setTimeout(() => {
-          onLoginSuccess(result.user);
-        }, 1500);
-      }
+      const result = await api.auth.login(selectedUser.id, cleanPin);
+      localStorage.setItem('authToken', result.token);
+      setSuccessMsg(`${result.user.name} হিসেবে সফলভাবে লগইন হয়েছে!`);
+      setTimeout(() => onLoginSuccess(result.user), 600);
     } catch (err: any) {
-      setErrorMsg(err.message || 'ভুল পিন বা সঠিক একাউন্ট ধরন নির্বাচন করা হয়নি! অনুগ্রহ করে সঠিক পিন টাইপ করুন।');
-    } finally {
+      setErrorMsg(err.message || 'ভুল পিন! সঠিক পিন দিয়ে আবার চেষ্টা করুন।');
       setIsSubmitting(false);
     }
   };
 
-  const triggerMockBiometric = async () => {
-    setIsBioScanning(true);
-    setErrorMsg('');
-    setSuccessMsg('');
+  const getRoleBangla = (role: string) => {
+    if (role === 'OWNER_ONE') return 'প্রধান মালিক';
+    if (role === 'OWNER_TWO') return 'মালিক';
+    return 'কর্মচারী';
+  };
 
-    try {
-      const defaultPin = selectedRole === 'OWNER' ? '9999' : '1234';
-      const result = await api.auth.login(defaultPin, selectedRole);
-      localStorage.setItem('authToken', result.token);
-
-      setIsBioScanning(false);
-      setSuccessMsg(`${result.user.name} হিসেবে বায়োমেট্রিক অথেন্টিকেশন সফল!`);
-      setTimeout(() => {
-        onLoginSuccess(result.user);
-      }, 600);
-    } catch (err: any) {
-      setIsBioScanning(false);
-      setErrorMsg(err.message || 'বায়োমেট্রিক লগইন ব্যর্থ হয়েছে।');
-    }
+  const getRoleColor = (role: string) => {
+    if (role === 'OWNER_ONE') return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+    if (role === 'OWNER_TWO') return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+    return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
   };
 
   return (
-    <div id="login-container" className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white relative overflow-hidden">
-      {/* Dynamic background subtle neon flow */}
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-white relative overflow-hidden">
       <div className="absolute top-0 left-0 w-[450px] h-[450px] bg-emerald-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2"></div>
       <div className="absolute bottom-0 right-0 w-[450px] h-[450px] bg-purple-600/10 rounded-full blur-3xl translate-x-1/2 translate-y-1/2"></div>
 
-      {/* 1. App Beautiful Vector Head Logo */}
       <div className="flex flex-col items-center mb-5 relative z-10">
         <div className="inline-flex items-center justify-center w-20 h-20 bg-emerald-500 rounded-3xl shadow-xl shadow-emerald-500/15 mb-4 relative group transition-transform duration-200 hover:scale-105">
           <div className="absolute inset-0 bg-white/10 rounded-3xl animate-pulse"></div>
@@ -138,202 +100,154 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         </p>
       </div>
 
-      {/* 2. Main Premium Card for Tabs Login / Registration */}
-      <div className="w-full max-w-[380px] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl relative z-10 overflow-hidden">
-
-        {/* TABS SWITCH: LOGIN vs REGISTER */}
-        <div className="grid grid-cols-2 bg-slate-950/80 p-1.5 border-b border-slate-850/70">
-          <button
-            type="button"
-            id="tab-login-btn"
-            onClick={() => {
-              setActiveTab2('LOGIN');
-              setErrorMsg('');
-              setSuccessMsg('');
-            }}
-            className={`py-2 px-3 text-center text-xs font-bold rounded-xl transition duration-150 cursor-pointer ${
-              activeTab === 'LOGIN'
-                ? 'bg-slate-800 text-white shadow-inner font-extrabold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            লগইন (Sign In)
-          </button>
-
-          <button
-            type="button"
-            id="tab-register-btn"
-            onClick={() => {
-              setActiveTab2('REGISTER');
-              setErrorMsg('');
-              setSuccessMsg('');
-            }}
-            className={`py-2 px-3 text-center text-xs font-bold rounded-xl transition duration-150 cursor-pointer ${
-              activeTab === 'REGISTER'
-                ? 'bg-slate-800 text-emerald-400 shadow-inner font-extrabold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            নিবন্ধন (Sign Up)
-          </button>
+      <div className="w-full max-w-[400px] bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl relative z-10 overflow-hidden">
+        <div className="bg-slate-950/80 p-3 border-b border-slate-850/70 flex items-center justify-center space-x-2">
+          <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <span className="text-xs font-bold text-slate-200">নিরাপদ লগইন</span>
         </div>
 
-        {/* Dynamic Interactive Panel Body */}
         <div className="p-5.5">
-
-          {/* Notification Alerts */}
           {errorMsg && (
-            <div id="login-error-msg" className="mb-4 bg-red-950/45 border border-red-800/60 rounded-xl p-3 text-xs text-red-300 leading-normal">
+            <div className="mb-4 bg-red-950/45 border border-red-800/60 rounded-xl p-3 text-xs text-red-300 leading-normal">
               {errorMsg}
             </div>
           )}
 
           {successMsg && (
-            <div id="login-success-msg" className="mb-4 bg-emerald-950/45 border border-emerald-800/60 rounded-xl p-3 text-xs text-emerald-300 flex items-center gap-2">
+            <div className="mb-4 bg-emerald-950/45 border border-emerald-800/60 rounded-xl p-3 text-xs text-emerald-300 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {isLoading ? (
+            <div className="text-center py-8">
+              <div className="w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+              <p className="text-xs text-slate-400">লোড হচ্ছে...</p>
+            </div>
+          ) : !selectedUser ? (
+            <div>
+              <div className="flex items-center space-x-2 mb-4">
+                <Users className="w-4 h-4 text-slate-400" />
+                <span className="text-xs font-semibold text-slate-300">আপনার অ্যাকাউন্ট নির্বাচন করুন</span>
+              </div>
 
-            {/* INPUT FIELD 1: NAME / USERNAME */}
-            {activeTab === 'REGISTER' && (
+              {usersList.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6 italic">
+                  কোনো অ্যাকাউন্ট পাওয়া যায়নি। সার্ভার চেক করুন।
+                </p>
+              ) : (
+                <div className="space-y-2.5">
+                  {usersList.map(user => (
+                    <button
+                      key={user.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedUser(user);
+                        setPinInput('');
+                        setErrorMsg('');
+                      }}
+                      className="w-full flex items-center space-x-3 p-3.5 bg-slate-950/70 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 rounded-2xl cursor-pointer transition group text-left"
+                    >
+                      {user.avatar ? (
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          referrerPolicy="no-referrer"
+                          className="w-10 h-10 rounded-full border border-slate-700 group-hover:border-emerald-500 object-cover transition"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 group-hover:border-emerald-500 flex items-center justify-center transition">
+                          <UserCheck className="w-5 h-5 text-slate-400" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className="block text-sm font-bold text-slate-200 group-hover:text-white truncate">
+                          {user.name}
+                        </span>
+                        <span className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border mt-0.5 ${getRoleColor(user.role)}`}>
+                          {getRoleBangla(user.role)}
+                        </span>
+                      </div>
+                      <Key className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 transition shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedUser(null);
+                  setPinInput('');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                }}
+                className="flex items-center space-x-1 text-xs text-slate-400 hover:text-white cursor-pointer transition mb-2"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>অন্য অ্যাকাউন্ট</span>
+              </button>
+
+              <div className="flex items-center space-x-3 p-3.5 bg-slate-950/70 border border-emerald-500/30 rounded-2xl">
+                {selectedUser.avatar ? (
+                  <img
+                    src={selectedUser.avatar}
+                    alt={selectedUser.name}
+                    referrerPolicy="no-referrer"
+                    className="w-12 h-12 rounded-full border-2 border-emerald-500 object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-slate-800 border-2 border-emerald-500 flex items-center justify-center">
+                    <UserCheck className="w-6 h-6 text-emerald-400" />
+                  </div>
+                )}
+                <div>
+                  <span className="block text-sm font-bold text-white">{selectedUser.name}</span>
+                  <span className={`inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border mt-0.5 ${getRoleColor(selectedUser.role)}`}>
+                    {getRoleBangla(selectedUser.role)}
+                  </span>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-slate-400 text-[11px] font-semibold mb-1">
-                  আপনার নাম বলুন <span className="text-slate-600 font-normal">(Name)</span>
+                  সিক্রেট পিন <span className="text-slate-600 font-normal">(PIN)</span>
                 </label>
-                <input
-                  id="input-login-username"
-                  type="text"
-                  placeholder="আপনার নাম লিখুন"
-                  value={usernameInput}
-                  onChange={(e) => setUsernameInput(e.target.value)}
-                  className="w-full bg-white text-slate-900 placeholder-slate-400 font-medium border border-slate-300 focus:border-emerald-500 rounded-xl py-2 px-3.5 text-xs focus:outline-none transition"
-                />
+                <div className="relative">
+                  <input
+                    type={showPin ? 'text' : 'password'}
+                    maxLength={20}
+                    placeholder="আপনার পিন দিন"
+                    value={pinInput}
+                    onChange={(e) => setPinInput(e.target.value)}
+                    autoFocus
+                    className="w-full bg-white text-slate-900 placeholder-slate-400 font-mono font-bold tracking-widest border border-slate-300 focus:border-emerald-500 rounded-xl py-2.5 px-3.5 pr-10 text-xs focus:outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-3.5 top-2.5 text-slate-400 hover:text-slate-650 cursor-pointer"
+                  >
+                    {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
-            )}
 
-            {/* INPUT FIELD 2: EMAIL ADDRESS (Only for registration or can be optionally filled) */}
-            {activeTab === 'REGISTER' && (
-              <div>
-                <label className="block text-slate-400 text-[11px] font-semibold mb-1">
-                  ইমেইল অ্যাড্রেস <span className="text-slate-600 font-normal">(Email Address)</span>
-                </label>
-                <input
-                  id="input-login-email"
-                  type="email"
-                  placeholder="example@email.com"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-white text-slate-900 placeholder-slate-404 font-medium border border-slate-300 focus:border-emerald-500 rounded-xl py-2 px-3.5 text-xs focus:outline-none transition"
-                />
-              </div>
-            )}
-
-            {/* INPUT FIELD 3: PIN OR PASSWORD */}
-            <div>
-              <label className="block text-slate-400 text-[11px] font-semibold mb-1">
-                {activeTab === 'LOGIN' ? '৪ সংখ্যার সিক্রেট পিন' : 'পাসওয়ার্ড বা পিন দিন'} <span className="text-slate-600 font-normal">(PIN/Password)</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="input-login-pin"
-                  type={showPin ? "text" : "password"}
-                  maxLength={activeTab === 'LOGIN' ? 4 : 20}
-                  placeholder="পাসওয়ার্ড দিন"
-                  value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
-                  className="w-full bg-white text-slate-900 placeholder-slate-400 font-mono font-bold tracking-widest border border-slate-300 focus:border-emerald-500 rounded-xl py-2 px-3.5 pr-10 text-xs focus:outline-none transition"
-                />
-                <button
-                  type="button"
-                  id="toggle-pin-visibility-btn"
-                  onClick={() => setShowPin(!showPin)}
-                  className="absolute right-3.5 top-2 text-slate-400 hover:text-slate-650 cursor-pointer"
-                >
-                  {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* ROLE DESIGN SELECTION (Owner vs Staff) */}
-            <div>
-              <label className="block text-slate-400 text-[11px] font-semibold mb-1.5">
-                একাউন্টের ভূমিকা নির্বাচন করুন
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  id="role-owner-btn"
-                  onClick={() => setSelectedRole('OWNER')}
-                  className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer ${
-                    selectedRole === 'OWNER'
-                      ? 'bg-slate-950 text-white border-slate-800'
-                      : 'bg-slate-950/20 text-slate-500 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <span>🛡️</span>
-                  <span>মালিক</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="role-staff-btn"
-                  onClick={() => setSelectedRole('STAFF')}
-                  className={`flex items-center justify-center space-x-2 py-2 px-3 rounded-xl text-xs font-bold border transition duration-150 cursor-pointer ${
-                    selectedRole === 'STAFF'
-                      ? 'bg-blue-950/15 text-blue-400 border-blue-500/50 hover:border-blue-500 shadow-md shadow-blue-500/5'
-                      : 'bg-slate-950/20 text-slate-500 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  <span>+ কর্মচারী</span>
-                </button>
-              </div>
-            </div>
-
-            {/* MAIN GREEN/TEAL CTA ACTION SUBMIT BUTTON */}
-            <button
-              id="submit-auth-form-btn"
-              type="submit"
-              disabled={isSubmitting}
-              className={`w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 cursor-pointer transition flex items-center justify-center space-x-1 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
-            >
-              <span>{isSubmitting ? 'অপেক্ষা করুন...' : (activeTab === 'LOGIN' ? 'লগইন সম্পন্ন করুন' : 'অ্যাাকাউন্ট তৈরি করুন')}</span>
-            </button>
-
-          </form>
-
-          {/* Quick Helper Pin testing prompt to maintain testability */}
-          <div className="mt-4 pt-3.5 border-t border-slate-850/50">
-            <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400/90 font-semibold mb-1">
-              <HelpCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>সহজে পরখ বা টেকনিক্যাল টেস্ট করতে:</span>
-            </div>
-            <p className="text-[9.5px] text-slate-400 leading-normal">
-              মালিক একাউন্ট পিন: <strong className="text-white font-mono bg-slate-950 px-1 py-0.5 rounded">9999</strong> বা <strong className="text-white font-mono bg-slate-950 px-1 py-0.5 rounded">8888</strong>.
-              কর্মচারী একাউন্ট পিন: <strong className="text-white font-mono bg-slate-950 px-1 py-0.5 rounded">1234</strong>। ওনারদের আসল নাম কর্মচারীদের কাছে গোপন থাকবে।
-            </p>
-          </div>
-
-          {/* Biometrics login options underneath */}
-          <div className="mt-3">
-            <button
-              type="button"
-              id="quick-bio-auth-btn"
-              onClick={triggerMockBiometric}
-              className={`w-full py-2 bg-slate-950 hover:bg-slate-850 border border-slate-800 text-slate-350 rounded-xl text-[10px] font-bold flex items-center justify-center space-x-1 cursor-pointer transition ${isBioScanning ? 'animate-pulse' : ''}`}
-            >
-              <Fingerprint className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{isBioScanning ? 'ফিঙ্গারপ্রিন্ট রিড হচ্ছে...' : 'ওয়ান ক্লিক রিড বা বায়োমেট্রিক এন্ট্রি'}</span>
-            </button>
-          </div>
-
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className={`w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 cursor-pointer transition flex items-center justify-center space-x-1 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                <span>{isSubmitting ? 'অপেক্ষা করুন...' : 'লগইন করুন'}</span>
+              </button>
+            </form>
+          )}
         </div>
       </div>
 
-      {/* 4. Brand custom-styled elegant footer */}
       <div className="mt-8 text-center text-slate-500 text-[11px] font-medium leading-relaxed tracking-wide select-none">
         ভূমি সেবা সহায়তা কেন্দ্র © ২০২৬
       </div>

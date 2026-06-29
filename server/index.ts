@@ -12,6 +12,7 @@ import reminderRoutes from './routes/reminders';
 import settingsRoutes from './routes/settings';
 import servicesRoutes from './routes/services';
 import backupRoutes from './routes/backup';
+import usersRoutes from './routes/users';
 
 dotenv.config();
 
@@ -30,6 +31,7 @@ app.use('/api/reminders', reminderRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/users', usersRoutes);
 
 // Serve static frontend files in production
 const distPath = path.join(process.cwd(), 'dist');

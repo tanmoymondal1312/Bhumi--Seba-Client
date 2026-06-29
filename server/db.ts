@@ -36,22 +36,43 @@ export async function initializeDatabase() {
   if ((users as any)[0].count === 0) {
     await seedDatabase();
   }
+
+  await syncPrimaryOwner();
+}
+
+async function syncPrimaryOwner() {
+  const ownerPin = process.env.OWNER_PIN || '9999';
+  const ownerName = process.env.OWNER_NAME || 'মালিক';
+  const ownerPhone = process.env.OWNER_PHONE || '01700-000000';
+
+  const [rows] = await pool.execute('SELECT id FROM users WHERE id = ?', ['owner1']);
+  const existing = rows as any[];
+
+  const hashedPin = await bcrypt.hash(ownerPin, 10);
+
+  if (existing.length > 0) {
+    await pool.execute(
+      'UPDATE users SET name = ?, pin = ?, phone = ? WHERE id = ?',
+      [ownerName, hashedPin, ownerPhone, 'owner1']
+    );
+  } else {
+    await pool.execute(
+      'INSERT INTO users (id, name, role, pin, avatar, phone) VALUES (?, ?, ?, ?, ?, ?)',
+      ['owner1', ownerName, 'OWNER_ONE', hashedPin, '', ownerPhone]
+    );
+  }
 }
 
 async function seedDatabase() {
-  const users = [
-    { id: 'owner1', name: 'মোঃ রনি', role: 'OWNER_ONE', pin: '9999', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80', phone: '01712-345678' },
-    { id: 'owner2', name: 'মোঃ রাসেল', role: 'OWNER_TWO', pin: '8888', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80', phone: '01912-876543' },
-    { id: 'staff1', name: 'সুজন হোসাইন', role: 'STAFF', pin: '1234', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80', phone: '01812-112233' },
-  ];
+  const ownerPin = process.env.OWNER_PIN || '9999';
+  const ownerName = process.env.OWNER_NAME || 'মালিক';
+  const ownerPhone = process.env.OWNER_PHONE || '01700-000000';
 
-  for (const u of users) {
-    const hashedPin = await bcrypt.hash(u.pin, 10);
-    await pool.execute(
-      'INSERT INTO users (id, name, role, pin, avatar, phone) VALUES (?, ?, ?, ?, ?, ?)',
-      [u.id, u.name, u.role, hashedPin, u.avatar, u.phone]
-    );
-  }
+  const hashedPin = await bcrypt.hash(ownerPin, 10);
+  await pool.execute(
+    'INSERT INTO users (id, name, role, pin, avatar, phone) VALUES (?, ?, ?, ?, ?, ?)',
+    ['owner1', ownerName, 'OWNER_ONE', hashedPin, '', ownerPhone]
+  );
 
   await pool.execute(
     `INSERT INTO settings (id, is_dark_mode, pin_lock_enabled, daily_reminder_text, expense_alert_threshold, monthly_rent, monthly_electricity, monthly_internet, monthly_salary, bkash_base_balance)
@@ -76,5 +97,5 @@ async function seedDatabase() {
     );
   }
 
-  console.log('Database seeded with default users, settings, and services.');
+  console.log('Database seeded with primary owner, settings, and services.');
 }

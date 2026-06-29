@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, QuickReminder } from '../types';
 import { api } from '../api/client';
 import {
   Settings, Key, AlertTriangle, ShieldAlert,
   CloudLightning, RefreshCw, CalendarDays, Plus, Trash2,
-  Sun, Moon, Users, CheckCircle2
+  Sun, Moon, Users, CheckCircle2, UserPlus, Pencil, X, Save, UserCheck
 } from 'lucide-react';
 
 interface SettingsManagerProps {
@@ -604,6 +604,389 @@ export default function SettingsManager({
       </div>
     )}
 
+    {/* USER MANAGEMENT SECTION (OWNER_ONE ONLY) */}
+    {currentUser.role === 'OWNER_ONE' && (
+      <UserManagementPanel />
+    )}
+
     </>
+  );
+}
+
+function UserManagementPanel() {
+  interface ManagedUser {
+    id: string;
+    name: string;
+    role: string;
+    avatar: string;
+    phone: string;
+  }
+
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [actionMsg, setActionMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<'OWNER_TWO' | 'STAFF'>('STAFF');
+  const [newPin, setNewPin] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editRole, setEditRole] = useState<'OWNER_TWO' | 'STAFF'>('STAFF');
+  const [editPin, setEditPin] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    try {
+      const data = await api.users.getAll();
+      setUsers(data);
+    } catch (err) {
+      console.error('Load users error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const showMsg = (msg: string, isError = false) => {
+    if (isError) {
+      setErrorMsg(msg);
+      setTimeout(() => setErrorMsg(''), 3000);
+    } else {
+      setActionMsg(msg);
+      setTimeout(() => setActionMsg(''), 3000);
+    }
+  };
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newPin.trim()) {
+      showMsg('নাম এবং পিন আবশ্যক।', true);
+      return;
+    }
+
+    try {
+      const created = await api.users.create({
+        name: newName.trim(),
+        role: newRole,
+        pin: newPin.trim(),
+        phone: newPhone.trim() || undefined,
+      });
+      setUsers(prev => [...prev, created]);
+      setNewName('');
+      setNewPin('');
+      setNewPhone('');
+      setShowAddForm(false);
+      showMsg(`"${created.name}" সফলভাবে যুক্ত করা হয়েছে!`);
+    } catch (err: any) {
+      showMsg(err.message || 'ব্যবহারকারী তৈরি ব্যর্থ।', true);
+    }
+  };
+
+  const startEdit = (user: ManagedUser) => {
+    setEditingId(user.id);
+    setEditName(user.name);
+    setEditRole(user.role as 'OWNER_TWO' | 'STAFF');
+    setEditPin('');
+    setEditPhone(user.phone || '');
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingId || !editName.trim()) {
+      showMsg('নাম আবশ্যক।', true);
+      return;
+    }
+
+    try {
+      const updateData: any = {
+        name: editName.trim(),
+        role: editRole,
+        phone: editPhone.trim(),
+      };
+      if (editPin.trim()) {
+        updateData.pin = editPin.trim();
+      }
+
+      const updated = await api.users.update(editingId, updateData);
+      setUsers(prev => prev.map(u => u.id === editingId ? updated : u));
+      setEditingId(null);
+      showMsg(`"${updated.name}" সফলভাবে আপডেট হয়েছে!`);
+    } catch (err: any) {
+      showMsg(err.message || 'আপডেট ব্যর্থ।', true);
+    }
+  };
+
+  const handleDeleteUser = async (user: ManagedUser) => {
+    if (!confirm(`আপনি কি নিশ্চিত "${user.name}" এর অ্যাকাউন্ট মুছে ফেলতে চান?`)) return;
+
+    try {
+      await api.users.delete(user.id);
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+      showMsg(`"${user.name}" সফলভাবে মুছে ফেলা হয়েছে।`);
+    } catch (err: any) {
+      showMsg(err.message || 'ডিলিট ব্যর্থ।', true);
+    }
+  };
+
+  const getRoleBangla = (role: string) => {
+    if (role === 'OWNER_ONE') return 'প্রধান মালিক';
+    if (role === 'OWNER_TWO') return 'মালিক';
+    return 'কর্মচারী';
+  };
+
+  const getRoleColor = (role: string) => {
+    if (role === 'OWNER_ONE') return 'text-emerald-400 bg-emerald-500/10';
+    if (role === 'OWNER_TWO') return 'text-amber-400 bg-amber-500/10';
+    return 'text-blue-400 bg-blue-500/10';
+  };
+
+  return (
+    <div className="mt-8 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden text-left">
+      <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="border-b border-slate-800 pb-4 mb-6">
+        <span className="text-[10px] uppercase font-bold tracking-widest text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full">
+          ব্যবহারকারী ব্যবস্থাপনা (User Management)
+        </span>
+        <h3 className="text-base font-black text-white mt-1.5 flex items-center">
+          <Users className="w-4.5 h-4.5 text-indigo-400 mr-2 shrink-0" />
+          অ্যাকাউন্ট তৈরি, সম্পাদনা ও মুছে ফেলুন
+        </h3>
+        <p className="text-[11px] text-slate-500 mt-1">এখান থেকে কর্মচারী বা অন্য মালিকের অ্যাকাউন্ট তৈরি করুন। প্রধান মালিকের পিন .env ফাইল থেকে নির্ধারিত হয়।</p>
+      </div>
+
+      {actionMsg && (
+        <div className="mb-4 bg-emerald-950/45 border border-emerald-800 text-emerald-300 p-3 rounded-2xl flex items-center space-x-2 text-xs">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{actionMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="mb-4 bg-red-950/45 border border-red-800 text-red-300 p-3 rounded-2xl text-xs">
+          {errorMsg}
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="text-center py-8">
+          <div className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-7 bg-slate-950/50 border border-slate-850 rounded-2xl p-4.5">
+            <span className="text-slate-400 text-xs font-semibold block mb-3">সকল ব্যবহারকারীর তালিকা</span>
+
+            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+              {users.map(user => (
+                <div key={user.id} className="bg-slate-900 border border-slate-850 rounded-xl hover:border-slate-700 transition">
+                  {editingId === user.id ? (
+                    <div className="p-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold">নাম</label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold">ফোন</label>
+                          <input
+                            type="text"
+                            value={editPhone}
+                            onChange={(e) => setEditPhone(e.target.value)}
+                            placeholder="01XXX-XXXXXX"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold">ভূমিকা</label>
+                          <select
+                            value={editRole}
+                            onChange={(e) => setEditRole(e.target.value as 'OWNER_TWO' | 'STAFF')}
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          >
+                            <option value="OWNER_TWO">মালিক</option>
+                            <option value="STAFF">কর্মচারী</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold">নতুন পিন <span className="text-slate-600">(ফাঁকা রাখলে আগেরটাই থাকবে)</span></label>
+                          <input
+                            type="text"
+                            value={editPin}
+                            onChange={(e) => setEditPin(e.target.value)}
+                            placeholder="নতুন পিন"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(null)}
+                          className="px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer transition flex items-center space-x-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>বাতিল</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleUpdateUser}
+                          className="px-3 py-1.5 text-xs text-slate-950 bg-emerald-500 hover:bg-emerald-600 font-bold rounded-lg cursor-pointer transition flex items-center space-x-1"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>সংরক্ষণ</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2">
+                      <div className="flex items-center space-x-3">
+                        {user.avatar ? (
+                          <img src={user.avatar} alt={user.name} referrerPolicy="no-referrer" className="w-9 h-9 rounded-full border border-slate-700 object-cover" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                            <UserCheck className="w-4.5 h-4.5 text-slate-400" />
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-xs font-bold text-slate-200">{user.name}</span>
+                          <div className="flex items-center space-x-2 mt-0.5">
+                            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${getRoleColor(user.role)}`}>
+                              {getRoleBangla(user.role)}
+                            </span>
+                            {user.phone && <span className="text-[9px] text-slate-500 font-mono">{user.phone}</span>}
+                          </div>
+                        </div>
+                      </div>
+
+                      {user.id !== 'owner1' && (
+                        <div className="flex items-center space-x-2 justify-end shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(user)}
+                            className="text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 p-1.5 rounded-xl cursor-pointer transition"
+                            title="সম্পাদনা"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(user)}
+                            className="text-slate-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded-xl cursor-pointer transition"
+                            title="মুছে ফেলুন"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-5 bg-slate-950/50 border border-slate-850 rounded-2xl p-4.5">
+            {showAddForm ? (
+              <form onSubmit={handleAddUser} className="space-y-3.5">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-slate-400 text-xs font-semibold">নতুন অ্যাকাউন্ট তৈরি</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="text-slate-500 hover:text-white p-1 rounded cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold">নাম (বাংলায়)</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="যেমন: সুজন হোসাইন"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold">ভূমিকা নির্বাচন</label>
+                  <select
+                    value={newRole}
+                    onChange={(e) => setNewRole(e.target.value as 'OWNER_TWO' | 'STAFF')}
+                    className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="STAFF">কর্মচারী</option>
+                    <option value="OWNER_TWO">মালিক</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold">লগইন পিন</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="যেমন: 1234"
+                    value={newPin}
+                    onChange={(e) => setNewPin(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs font-mono focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 font-bold">ফোন নম্বর <span className="text-slate-600">(ঐচ্ছিক)</span></label>
+                  <input
+                    type="text"
+                    placeholder="01XXX-XXXXXX"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 font-bold text-xs rounded-xl text-white cursor-pointer flex items-center justify-center space-x-1"
+                >
+                  <UserPlus className="w-4 h-4 shrink-0" />
+                  <span>অ্যাকাউন্ট তৈরি করুন</span>
+                </button>
+              </form>
+            ) : (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center mx-auto mb-4">
+                  <UserPlus className="w-8 h-8 text-indigo-400" />
+                </div>
+                <p className="text-xs text-slate-400 mb-4">কর্মচারী বা অন্য মালিকের জন্য নতুন অ্যাকাউন্ট তৈরি করুন</p>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(true)}
+                  className="px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 font-bold text-xs rounded-xl text-white cursor-pointer flex items-center justify-center space-x-1 mx-auto"
+                >
+                  <Plus className="w-4 h-4 shrink-0" />
+                  <span>নতুন অ্যাকাউন্ট যোগ করুন</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
