@@ -214,7 +214,7 @@ export default function Dashboard({
     const cashExpenses = expenseList
       .reduce((sum, e) => sum + e.amount, 0); // simplifying total expenses as cash out of register for cash-in-hand calculation
 
-    const cashBase = 18000;
+    const cashBase = 0;
     const defaultCashInHand = Math.max(0, cashBase + cashIncome + bKashCashedOut - cashExpenses);
 
     const hasCashOverride = settings?.cashInHandOverride !== undefined && settings?.cashInHandOverride !== null && settings?.cashInHandOverride >= 0;
