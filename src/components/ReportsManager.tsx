@@ -400,174 +400,246 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
   }, [incomeList, expenseList]);
 
   const handlePrintPDF = () => {
-    const printContent = `
-      <html>
-        <head>
-          <title>ভূমি সেবা সহায়তা কেন্দ্র অডিট রিপোর্ট - ${activeMonthReport.monthLabel}</title>
-          <style>
-            body { font-family: 'Helvetica Neue', 'Arial', sans-serif; padding: 40px; color: #1e293b; background: white; }
-            .header { text-align: center; border-bottom: 3px double #cbd5e1; padding-bottom: 20px; margin-bottom: 30px; }
-            .header h1 { margin: 0; font-size: 24px; color: #4f46e5; }
-            .header p { margin: 5px 0 0; font-size: 14px; color: #64748b; }
-            .meta-info { display: flex; justify-content: space-between; margin-bottom: 25px; font-size: 13px; color: #475569; }
-            .meta-item { background: #f8fafc; padding: 10px 15px; border-radius: 8px; border: 1px solid #e2e8f0; width: 48%; box-sizing: border-box; }
-            .section-title { font-size: 16px; font-weight: bold; color: #0f172a; border-left: 4px solid #4f46e5; padding-left: 10px; margin-top: 30px; margin-bottom: 15px; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-            th, td { border: 1px solid #e2e8f0; padding: 10px 12px; text-align: left; }
-            th { background: #f1f5f9; font-weight: bold; color: #334155; }
-            .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
-            .footer { margin-top: 50px; text-align: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 15px; }
-            .grid { display: flex; justify-content: space-between; gap: 20px; }
-            .card { flex: 1; background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; }
-            .value { font-size: 18px; font-weight: bold; color: #0f172a; margin-top: 5px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>ভূমি সেবা সহায়তা কেন্দ্র</h1>
-            <p>মাসিক ডিজিটাল আর্থিক বিবরণী ও অডিট খতিয়ান (${activeMonthReport.monthLabel})</p>
-          </div>
+    const r = activeMonthReport;
+    const profitColor = r.netProfit >= 0 ? '#059669' : '#dc2626';
+    const profitLabel = r.netProfit >= 0 ? 'নিট লাভ' : 'নিট লোকসান';
+    const now = new Date();
+    const printTime = now.toLocaleString('bn-BD', { dateStyle: 'long', timeStyle: 'short' });
 
-          <div class="meta-info">
-            <div class="meta-item">
-              <strong>রিপোর্ট পিরিয়ড:</strong> ${activeMonthReport.monthLabel} (${selectedMonth})<br/>
-              <strong>প্রস্তুতকারক:</strong> ${currentUser.name}
-            </div>
-            <div class="meta-item text-right">
-              <strong>তারিখ:</strong> ${formatBanglaDate(getTodayStr())}<br/>
-              <strong>রোল:</strong> ${currentUser.role === 'STAFF' ? 'কর্মচারী' : 'দোকান মালিক'}
-            </div>
-          </div>
+    const servicesRows = r.servicesReport.filter(s => s.count > 0).map((svc, i) => `
+      <tr>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:600;">${svc.bangla}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:center;">${svc.count}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#059669;">৳${svc.sum.toLocaleString()}</td>
+      </tr>
+    `).join('');
 
-          <div class="section-title">১. সামগ্রিক লাভ-লোকসান সারসংক্ষেপ</div>
-          <div class="grid">
-            <div class="card">
-              <div style="font-size: 12px; color: #64748b;">মোট অর্জিত সেবা রাজস্ব</div>
-              <div class="value" style="color: #10b981;">৳${activeMonthReport.totalIncome.toLocaleString()}</div>
-            </div>
-            <div class="card">
-              <div style="font-size: 12px; color: #64748b;">মোট দোকান পরিচালন ব্যয়</div>
-              <div class="value" style="color: #ef4444;">৳${activeMonthReport.totalExpense.toLocaleString()}</div>
-            </div>
-            <div class="card">
-              <div style="font-size: 12px; color: #64748b;">নিট লাভ (Net Profit)</div>
-              <div class="value" style="color: ${activeMonthReport.netProfit >= 0 ? '#10b981' : '#ef4444'};">৳${activeMonthReport.netProfit.toLocaleString()}</div>
-            </div>
-          </div>
+    const expenseRows = r.expensesReport.filter(e => e.count > 0).map((exp, i) => `
+      <tr>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:600;">${exp.bangla}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:center;">${exp.count}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#dc2626;">৳${exp.sum.toLocaleString()}</td>
+      </tr>
+    `).join('');
 
-          <div class="section-title">২. দোকান পরিচালনা ও সিস্টেম লস রিপোর্ট</div>
-          <table>
-            <tr>
-              <td>দোকান খোলা ছিল</td>
-              <td class="font-bold">${activeMonthReport.openDaysCount} দিন</td>
-              <td>দোকান বন্ধ ছিল</td>
-              <td class="font-bold">${activeMonthReport.closedDaysCount} দিন</td>
-            </tr>
-            <tr>
-              <td>প্রতি বন্ধ দিনে আনুমানিক গড় লস</td>
-              <td class="font-bold" style="color: #f59e0b;">৳${activeMonthReport.dailyFixedLoss.toLocaleString()}</td>
-              <td>বন্ধ দিনের মোট পুঞ্জীভূত লস</td>
-              <td class="font-bold" style="color: #ef4444;">৳${activeMonthReport.totalClosedDaysLoss.toLocaleString()}</td>
-            </tr>
-            <tr>
-              <td>খোলা দিনে দৈনিক গড় সার্ভিস ইনকাম</td>
-              <td class="font-bold" style="color: #10b981;">৳${activeMonthReport.averageIncomePerOpenDay.toLocaleString()}</td>
-              <td>দৈনিক গড় পরিচালন খরচ</td>
-              <td class="font-bold">৳${Math.round(activeMonthReport.totalDeductions / 30).toLocaleString()}</td>
-            </tr>
-          </table>
+    const html = `<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>আর্থিক প্রতিবেদন — ${r.monthLabel}</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans Bengali','Segoe UI',sans-serif; background:#f1f5f9; color:#1e293b; line-height:1.6; }
+  .page { max-width:800px; margin:20px auto; background:#fff; border-radius:12px; box-shadow:0 4px 24px rgba(0,0,0,0.08); overflow:hidden; }
 
-          <div class="section-title">৩. বিকাশ লেনদেন হিসাব বিবরণী</div>
-          <div class="grid">
-            <div class="card">
-              <div style="font-size: 12px; color: #64748b;">বিকাশ ক্যাশ এন্ট্রি (In)</div>
-              <div class="value" style="color: #10b981;">৳${activeMonthReport.totalBkashIn.toLocaleString()}</div>
-            </div>
-            <div class="card">
-              <div style="font-size: 12px; color: #64748b;">বিকাশ মোট খরচ (Spent)</div>
-              <div class="value" style="color: #f43f5e;">৳${activeMonthReport.totalBkashSpent.toLocaleString()}</div>
-            </div>
-            <div class="card">
-              <div style="font-size: 12px; color: #64748b;">লেনদেনের সংখ্যা</div>
-              <div class="value" style="color: #3b82f6;">${activeMonthReport.bkashItemsCount} টি ভাউচার</div>
-            </div>
-          </div>
+  .header { background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%); color:#fff; padding:36px 40px 28px; position:relative; }
+  .header::after { content:''; position:absolute; bottom:0; left:0; right:0; height:4px; background:linear-gradient(90deg,#10b981,#3b82f6,#8b5cf6); }
+  .logo-row { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+  .logo-icon { width:48px; height:48px; background:linear-gradient(135deg,#10b981,#059669); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 4px 12px rgba(16,185,129,0.3); }
+  .logo-text h1 { font-size:22px; font-weight:800; letter-spacing:-0.3px; }
+  .logo-text p { font-size:11px; opacity:0.7; font-weight:500; letter-spacing:0.5px; }
+  .report-badge { display:inline-block; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); padding:6px 16px; border-radius:20px; font-size:13px; font-weight:600; margin-top:12px; }
 
-          <div class="section-title">৪. স্থায়ী ও ইউটিলিটি বিল খরচ ব্রেকডাউন</div>
-          <table>
-            <thead>
-              <tr>
-                <th>পরিচালনা খাতের নাম</th>
-                <th class="text-right">খরচ পরিমাণ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>দোকান ঘর ভাড়া (Rent)</td>
-                <td class="text-right font-bold">৳${activeMonthReport.rentVal.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>বিদ্যুৎ বিল (Electricity)</td>
-                <td class="text-right font-bold">৳${activeMonthReport.elecVal.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>ইন্টারনেট সংযোগ বিল (Internet)</td>
-                <td class="text-right font-bold">৳${activeMonthReport.netVal.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>কর্মচারী মাসিক বেতন (Salary)</td>
-                <td class="text-right font-bold">৳${activeMonthReport.salVal.toLocaleString()}</td>
-              </tr>
-              <tr>
-                <td>অন্যান্য সাধারণ ব্যবসায়িক খরচ (Office & Papers)</td>
-                <td class="text-right font-bold">৳${activeMonthReport.extraVal.toLocaleString()}</td>
-              </tr>
-              <tr style="background: #f8fafc; font-size: 14px;">
-                <td class="font-bold">সর্বমোট পরিচালনা ফিক্সড ব্যয়</td>
-                <td class="text-right font-bold" style="color: #ef4444;">৳${activeMonthReport.totalDeductions.toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
+  .meta-strip { display:flex; justify-content:space-between; padding:16px 40px; background:#f8fafc; border-bottom:1px solid #e2e8f0; font-size:12px; color:#64748b; }
+  .meta-strip span { font-weight:600; color:#334155; }
 
-          <div class="section-title">৫. বিস্তারিত সেবা খাতভিত্তিক আয় ব্রেকডাউন</div>
-          <table>
-            <thead>
-              <tr>
-                <th>সেবার নাম</th>
-                <th class="text-right">আবেদন সংখ্যা</th>
-                <th class="text-right">মোট অর্জিত রাজস্ব</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${activeMonthReport.servicesReport.map(svc => `
-                <tr>
-                  <td>${svc.bangla}</td>
-                  <td class="text-right">${svc.count} টি</td>
-                  <td class="text-right font-bold">৳${svc.sum.toLocaleString()}</td>
-                </tr>
-              `).join('')}
-              <tr style="background: #f8fafc; font-size: 14px;">
-                <td class="font-bold" colspan="2">সর্বমোট সেবা রাজস্ব</td>
-                <td class="text-right font-bold" style="color: #10b981;">৳${activeMonthReport.totalIncome.toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
+  .body { padding:32px 40px 40px; }
 
-          <div class="footer">
-            * এই অডিট ফাইলটি কম্পিউটার সিস্টেম দ্বারা স্বয়ংক্রিয়ভাবে তৈরি হয়েছে এবং প্রিন্ট কপি অফিসিয়াল সংরক্ষণের উপযোগী। *
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-      </html>
-    `;
+  .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px; }
+  .summary-card { border-radius:12px; padding:20px; text-align:center; border:1px solid #e2e8f0; }
+  .summary-card.green { background:linear-gradient(135deg,#ecfdf5,#d1fae5); border-color:#a7f3d0; }
+  .summary-card.red { background:linear-gradient(135deg,#fef2f2,#fee2e2); border-color:#fecaca; }
+  .summary-card.blue { background:linear-gradient(135deg,#eff6ff,#dbeafe); border-color:#bfdbfe; }
+  .summary-card .label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:#64748b; margin-bottom:6px; }
+  .summary-card .amount { font-size:26px; font-weight:800; }
+  .summary-card.green .amount { color:#059669; }
+  .summary-card.red .amount { color:#dc2626; }
+  .summary-card.blue .amount { color:#2563eb; }
+
+  .section { margin-bottom:28px; }
+  .section-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #e2e8f0; }
+  .section-num { width:28px; height:28px; background:#4f46e5; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; }
+  .section-title { font-size:15px; font-weight:700; color:#0f172a; }
+
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:#f1f5f9; padding:10px 14px; text-align:left; font-weight:700; color:#475569; border-bottom:2px solid #cbd5e1; font-size:12px; text-transform:uppercase; letter-spacing:0.5px; }
+  thead th.r { text-align:right; }
+  thead th.c { text-align:center; }
+  tbody tr:hover { background:#f8fafc; }
+  .total-row { background:#f1f5f9 !important; }
+  .total-row td { font-weight:800 !important; font-size:14px; padding:12px 14px; border-top:2px solid #cbd5e1; }
+
+  .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .info-item { display:flex; justify-content:space-between; padding:10px 14px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0; font-size:13px; }
+  .info-item .k { color:#64748b; font-weight:500; }
+  .info-item .v { font-weight:700; color:#0f172a; }
+
+  .bkash-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:10px; }
+  .bk-card { padding:16px; border-radius:10px; text-align:center; }
+  .bk-card.in { background:#ecfdf5; border:1px solid #a7f3d0; }
+  .bk-card.out { background:#fef2f2; border:1px solid #fecaca; }
+  .bk-card.count { background:#eff6ff; border:1px solid #bfdbfe; }
+  .bk-card .bk-label { font-size:11px; color:#64748b; font-weight:600; margin-bottom:4px; }
+  .bk-card .bk-val { font-size:20px; font-weight:800; }
+  .bk-card.in .bk-val { color:#059669; }
+  .bk-card.out .bk-val { color:#dc2626; }
+  .bk-card.count .bk-val { color:#2563eb; }
+
+  .footer { margin-top:40px; padding-top:20px; border-top:2px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#94a3b8; }
+  .footer-left { max-width:60%; }
+  .footer-seal { width:60px; height:60px; border:2px solid #cbd5e1; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:8px; color:#94a3b8; text-align:center; font-weight:700; line-height:1.2; }
+
+  .print-bar { position:fixed; bottom:0; left:0; right:0; background:#0f172a; padding:12px 24px; display:flex; justify-content:center; gap:12px; z-index:100; box-shadow:0 -4px 20px rgba(0,0,0,0.2); }
+  .print-bar button { padding:10px 28px; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; font-family:'Noto Sans Bengali',sans-serif; }
+  .btn-print { background:linear-gradient(135deg,#10b981,#059669); color:#fff; }
+  .btn-print:hover { background:linear-gradient(135deg,#059669,#047857); }
+  .btn-close { background:#334155; color:#cbd5e1; }
+  .btn-close:hover { background:#475569; }
+
+  @media print {
+    body { background:#fff; }
+    .page { margin:0; box-shadow:none; border-radius:0; }
+    .print-bar { display:none !important; }
+    .header::after { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+    .summary-card, .bk-card, .info-item, thead th, .total-row, .section-num { print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="logo-row">
+      <div class="logo-icon">🏛</div>
+      <div class="logo-text">
+        <h1>ভূমি সেবা সহায়তা কেন্দ্র</h1>
+        <p>BHUMI SEVA SAHAYATA KENDRA</p>
+      </div>
+    </div>
+    <div class="report-badge">📊 মাসিক আর্থিক প্রতিবেদন — ${r.monthLabel}</div>
+  </div>
+
+  <div class="meta-strip">
+    <div>প্রস্তুতকারক: <span>${currentUser.name}</span> (${currentUser.role === 'STAFF' ? 'কর্মচারী' : 'মালিক'})</div>
+    <div>প্রস্তুতের সময়: <span>${printTime}</span></div>
+    <div>রিপোর্ট পিরিয়ড: <span>${selectedMonth}</span></div>
+  </div>
+
+  <div class="body">
+    <div class="summary-grid">
+      <div class="summary-card green">
+        <div class="label">মোট সেবা রাজস্ব</div>
+        <div class="amount">৳${r.totalIncome.toLocaleString()}</div>
+      </div>
+      <div class="summary-card red">
+        <div class="label">মোট পরিচালন ব্যয়</div>
+        <div class="amount">৳${r.totalExpense.toLocaleString()}</div>
+      </div>
+      <div class="summary-card blue">
+        <div class="label">${profitLabel}</div>
+        <div class="amount" style="color:${profitColor}">৳${r.netProfit.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">১</div>
+        <div class="section-title">দোকান পরিচালনা পরিসংখ্যান</div>
+      </div>
+      <div class="info-grid">
+        <div class="info-item"><span class="k">দোকান খোলা ছিল</span><span class="v">${r.openDaysCount} দিন</span></div>
+        <div class="info-item"><span class="k">দোকান বন্ধ ছিল</span><span class="v">${r.closedDaysCount} দিন</span></div>
+        <div class="info-item"><span class="k">দৈনিক গড় আয় (খোলা দিন)</span><span class="v" style="color:#059669">৳${r.averageIncomePerOpenDay.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">দৈনিক স্থায়ী খরচ</span><span class="v">৳${r.dailyFixedLoss.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">বন্ধ দিনে পুঞ্জীভূত লস</span><span class="v" style="color:#dc2626">৳${r.totalClosedDaysLoss.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">দৈনিক গড় পরিচালন খরচ</span><span class="v">৳${Math.round(r.totalDeductions / 30).toLocaleString()}</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">২</div>
+        <div class="section-title">সেবা খাতভিত্তিক আয়ের বিশ্লেষণ</div>
+      </div>
+      <table>
+        <thead><tr><th>ক্র.</th><th>সেবার নাম</th><th class="c">আবেদন সংখ্যা</th><th class="r">মোট রাজস্ব</th></tr></thead>
+        <tbody>
+          ${servicesRows || '<tr><td colspan="4" style="padding:16px;text-align:center;color:#94a3b8;">এই মাসে কোনো সেবা আয় নেই</td></tr>'}
+          <tr class="total-row">
+            <td colspan="3">সর্বমোট সেবা রাজস্ব</td>
+            <td style="text-align:right;color:#059669;">৳${r.totalIncome.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">৩</div>
+        <div class="section-title">ব্যয় খাতভিত্তিক বিশ্লেষণ</div>
+      </div>
+      <table>
+        <thead><tr><th>ক্র.</th><th>খাতের নাম</th><th class="c">লেনদেন সংখ্যা</th><th class="r">ব্যয়ের পরিমাণ</th></tr></thead>
+        <tbody>
+          ${expenseRows || '<tr><td colspan="4" style="padding:16px;text-align:center;color:#94a3b8;">এই মাসে কোনো ব্যয় নেই</td></tr>'}
+          <tr class="total-row">
+            <td colspan="3">সর্বমোট পরিচালন ব্যয়</td>
+            <td style="text-align:right;color:#dc2626;">৳${r.totalExpense.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">৪</div>
+        <div class="section-title">স্থায়ী খরচ ব্রেকডাউন</div>
+      </div>
+      <div class="info-grid">
+        <div class="info-item"><span class="k">দোকান ঘর ভাড়া</span><span class="v">৳${r.rentVal.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">বিদ্যুৎ বিল</span><span class="v">৳${r.elecVal.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">ইন্টারনেট বিল</span><span class="v">৳${r.netVal.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">কর্মচারী বেতন</span><span class="v">৳${r.salVal.toLocaleString()}</span></div>
+        <div class="info-item"><span class="k">অন্যান্য খরচ</span><span class="v">৳${r.extraVal.toLocaleString()}</span></div>
+        <div class="info-item" style="background:#f1f5f9;border-color:#cbd5e1;"><span class="k" style="color:#0f172a;font-weight:700;">সর্বমোট স্থায়ী ব্যয়</span><span class="v" style="color:#dc2626;">৳${r.totalDeductions.toLocaleString()}</span></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">৫</div>
+        <div class="section-title">বিকাশ লেনদেন সারসংক্ষেপ</div>
+      </div>
+      <div class="bkash-grid">
+        <div class="bk-card in"><div class="bk-label">বিকাশ ক্যাশ-ইন</div><div class="bk-val">৳${r.totalBkashIn.toLocaleString()}</div></div>
+        <div class="bk-card out"><div class="bk-label">বিকাশ মোট ব্যয়</div><div class="bk-val">৳${r.totalBkashSpent.toLocaleString()}</div></div>
+        <div class="bk-card count"><div class="bk-label">মোট লেনদেন</div><div class="bk-val">${r.bkashItemsCount} টি</div></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div class="footer-left">
+        এই আর্থিক প্রতিবেদনটি <strong>ভূমি সেবা সহায়তা কেন্দ্র</strong> সফটওয়্যার সিস্টেম দ্বারা স্বয়ংক্রিয়ভাবে তৈরি হয়েছে।<br/>
+        প্রতিবেদনটি অফিসিয়াল ব্যবসায়িক রেকর্ড সংরক্ষণ ও হিসাব নিরীক্ষার জন্য গ্রহণযোগ্য।
+      </div>
+      <div class="footer-seal">অডিট<br/>সিল</div>
+    </div>
+  </div>
+</div>
+
+<div class="print-bar">
+  <button class="btn-print" onclick="window.print()">🖨️ প্রিন্ট / PDF সেভ করুন</button>
+  <button class="btn-close" onclick="window.close()">✕ বন্ধ করুন</button>
+</div>
+</body>
+</html>`;
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
-      printWindow.document.write(printContent);
+      printWindow.document.write(html);
       printWindow.document.close();
     }
   };
