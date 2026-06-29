@@ -468,7 +468,7 @@ export default function Dashboard({
 
       {/* QUICK INCOME ENTRY WIDGET */}
       <div className="bg-slate-900 border border-emerald-500/25 rounded-2xl p-4.5 shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-xl"></div>
+        <div className="absolute right-0 top-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-xl pointer-events-none"></div>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
