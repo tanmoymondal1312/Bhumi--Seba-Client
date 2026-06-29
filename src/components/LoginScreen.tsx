@@ -259,7 +259,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           className="inline-flex items-center space-x-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition group"
         >
           <img
-            src="https://mediaghor.com/static/favicon/favicon-96x96.png"
+            src="/mediaghor-icon.png"
             alt="Mediaghor"
             className="w-3.5 h-3.5 rounded-sm opacity-40 group-hover:opacity-80 transition"
           />

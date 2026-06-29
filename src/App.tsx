@@ -684,7 +684,7 @@ export default function App() {
           className="inline-flex items-center space-x-2 text-xs text-slate-500 hover:text-slate-300 transition group"
         >
           <img
-            src="https://mediaghor.com/static/favicon/favicon-96x96.png"
+            src="/mediaghor-icon.png"
             alt="Mediaghor"
             className="w-4 h-4 rounded-sm opacity-50 group-hover:opacity-100 transition"
           />
