@@ -78,7 +78,7 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
 
 router.post('/reset', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    if (req.userRole !== 'OWNER_ONE' && req.userRole !== 'OWNER_TWO') {
+    if (req.userRole !== 'OWNER_ONE') {
       res.status(403).json({ message: 'শুধুমাত্র মালিক রিসেট করতে পারেন।' });
       return;
     }

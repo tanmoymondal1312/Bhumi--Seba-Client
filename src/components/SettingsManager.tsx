@@ -40,6 +40,7 @@ export default function SettingsManager({
   onUpdateServicesMetadata
 }: SettingsManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
+  const isPrimaryOwner = currentUser.role === 'OWNER_ONE';
 
   // Custom service type configurations variables
   const [newServiceBangla, setNewServiceBangla] = useState<string>('');
@@ -419,25 +420,12 @@ export default function SettingsManager({
               <span>{backupStatus === 'backing_up' ? 'ক্লাউড ব্যাকআপ ফাইল তৈরি হচ্ছে...' : 'নতুন সেভ ব্যাকআপ (.JSON) ডাউনলোড'}</span>
             </button>
 
-            {/* Reset Button (Only Owner) */}
-            {isOwner ? (
-              <button
-                id="btn-trigger-reset"
-                onClick={() => {
-                  if (confirm('রোরিং সতর্কবার্তা! আপনি কি নিশ্চিত যে সমস্ত টেস্ট ডাটা ডিলিট করে সম্পূর্ণ অ্যাপ নতুন করে প্রথমাবস্থায় রিসেট করতে চান? এটি রিভার্ট করা যাবে না।')) {
-                    onResetData();
-                    alert('সফলভাবে সমস্ত ডাটা মুছে দিয়ে ফেস রিসেট করা হয়েছে!');
-                    window.location.reload();
-                  }
-                }}
-                className="w-full flex items-center justify-center space-x-2 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-400/40 rounded-2xl cursor-pointer text-xs font-semibold transition"
-              >
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                <span>সম্পূর্ণ ডাটা মুছে ফেলুন (Reset Base App)</span>
-              </button>
+            {/* Reset Button (Only Primary Owner with PIN) */}
+            {isPrimaryOwner ? (
+              <ResetWithPinVerify onResetData={onResetData} />
             ) : (
               <div className="text-[10px] text-slate-500 text-center py-2 italic">
-                * ডাটাবেজ ডিলিট / রিসেট করার অধিকার কর্মচারীর নেই।
+                * ডাটাবেজ রিসেট করার অধিকার শুধুমাত্র প্রধান মালিকের।
               </div>
             )}
 
@@ -610,6 +598,90 @@ export default function SettingsManager({
     )}
 
     </>
+  );
+}
+
+function ResetWithPinVerify({ onResetData }: { onResetData: () => void }) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+
+  const handleReset = async () => {
+    if (!pin.trim()) {
+      setError('পিন দিন।');
+      return;
+    }
+    setIsResetting(true);
+    setError('');
+    try {
+      const res = await api.auth.login('owner1', pin.trim());
+      if (res.token) {
+        localStorage.setItem('authToken', res.token);
+        await onResetData();
+        window.location.reload();
+      }
+    } catch {
+      setError('ভুল পিন! রিসেট বাতিল হয়েছে।');
+      setIsResetting(false);
+    }
+  };
+
+  if (!showConfirm) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShowConfirm(true)}
+        className="w-full flex items-center justify-center space-x-2 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 hover:border-rose-400/40 rounded-2xl cursor-pointer text-xs font-semibold transition"
+      >
+        <ShieldAlert className="w-4 h-4 shrink-0" />
+        <span>সম্পূর্ণ ডাটা মুছে ফেলুন (Reset)</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-rose-950/30 border border-rose-500/30 rounded-2xl p-4 space-y-3">
+      <div className="flex items-center space-x-2 text-rose-400">
+        <ShieldAlert className="w-4 h-4 shrink-0" />
+        <span className="text-xs font-bold">সতর্কতা! সমস্ত ডাটা চিরতরে মুছে যাবে।</span>
+      </div>
+      <p className="text-[10px] text-rose-300/70 leading-relaxed">
+        এই অ্যাকশন রিভার্ট করা যাবে না। সমস্ত ইনকাম, ব্যয়, বিকাশ, রিমাইন্ডার এবং অন্যান্য ব্যবহারকারী মুছে যাবে।
+      </p>
+      {error && (
+        <div className="bg-red-950/50 border border-red-800/50 rounded-xl p-2 text-[11px] text-red-300">{error}</div>
+      )}
+      <div>
+        <label className="text-[10px] text-rose-300/80 font-semibold block mb-1">নিশ্চিত করতে আপনার পিন দিন</label>
+        <input
+          type="password"
+          maxLength={20}
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+          placeholder="আপনার পিন"
+          className="w-full bg-slate-950 border border-rose-500/30 rounded-xl py-2 px-3 text-white text-xs font-mono focus:outline-none focus:border-rose-500"
+        />
+      </div>
+      <div className="flex items-center space-x-2">
+        <button
+          type="button"
+          onClick={() => { setShowConfirm(false); setPin(''); setError(''); }}
+          className="flex-1 py-2 text-xs font-semibold text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl cursor-pointer transition"
+        >
+          বাতিল
+        </button>
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={isResetting}
+          className={`flex-1 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl cursor-pointer transition flex items-center justify-center space-x-1 ${isResetting ? 'opacity-60 cursor-not-allowed' : ''}`}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>{isResetting ? 'মুছে ফেলা হচ্ছে...' : 'নিশ্চিত, মুছে ফেলুন'}</span>
+        </button>
+      </div>
+    </div>
   );
 }
 
