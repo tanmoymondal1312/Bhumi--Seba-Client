@@ -96,4 +96,19 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.put('/avatar', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { avatar } = req.body;
+    if (!avatar) {
+      res.status(400).json({ message: 'অ্যাভাটার দেওয়া আবশ্যক।' });
+      return;
+    }
+    await pool.execute('UPDATE users SET avatar = ? WHERE id = ?', [avatar, req.userId]);
+    res.json({ avatar });
+  } catch (err) {
+    console.error('Avatar update error:', err);
+    res.status(500).json({ message: 'সার্ভার ত্রুটি।' });
+  }
+});
+
 export default router;

@@ -32,6 +32,10 @@ export async function initializeDatabase() {
     await pool.execute(stmt);
   }
 
+  try {
+    await pool.execute('ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT');
+  } catch {}
+
   const [users] = await pool.execute('SELECT COUNT(*) as count FROM users');
   if ((users as any)[0].count === 0) {
     await seedDatabase();

@@ -41,6 +41,11 @@ export const api = {
       request('/auth/logout', { method: 'POST' }),
     me: () =>
       request<{ user: any }>('/auth/me'),
+    updateAvatar: (avatar: string) =>
+      request<{ avatar: string }>('/auth/avatar', {
+        method: 'PUT',
+        body: JSON.stringify({ avatar }),
+      }),
   },
 
   users: {

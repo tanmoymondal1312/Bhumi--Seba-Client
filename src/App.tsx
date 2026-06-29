@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, SystemSettings, ServiceType } from './types';
 import { getTodayStr, formatBanglaDate } from './utils/finance';
 import { api } from './api/client';
@@ -21,7 +21,7 @@ import SettingsManager from './components/SettingsManager';
 import {
   FolderLock, LayoutDashboard, Landmark, Coins,
   CreditCard, TrendingUp, Settings, LogOut, CheckCircle,
-  HelpCircle, ShieldCheck, Sun, Moon, CalendarDays, Globe, UserCheck
+  HelpCircle, ShieldCheck, Sun, Moon, CalendarDays, Globe, UserCheck, Camera
 } from 'lucide-react';
 
 export default function App() {
@@ -358,6 +358,38 @@ export default function App() {
     }
   };
 
+  // AVATAR UPLOAD
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const img = new Image();
+
+    img.onload = async () => {
+      canvas.width = 150;
+      canvas.height = 150;
+      const size = Math.min(img.width, img.height);
+      const sx = (img.width - size) / 2;
+      const sy = (img.height - size) / 2;
+      ctx.drawImage(img, sx, sy, size, size, 0, 0, 150, 150);
+      const base64 = canvas.toDataURL('image/jpeg', 0.8);
+
+      try {
+        await api.auth.updateAvatar(base64);
+        setCurrentUser(prev => prev ? { ...prev, avatar: base64 } : prev);
+      } catch (err) {
+        console.error('Avatar upload error:', err);
+      }
+    };
+
+    img.src = URL.createObjectURL(file);
+    if (avatarInputRef.current) avatarInputRef.current.value = '';
+  };
+
   // LOADING STATE
   if (isLoading) {
     return (
@@ -430,14 +462,37 @@ export default function App() {
               )}
             </button>
 
-            {/* Active User Label */}
+            {/* Active User Label with Avatar Upload */}
             <div className="flex items-center space-x-2 bg-slate-950/50 border border-slate-850/60 p-1.5 pl-2.5 pr-2.5 rounded-full text-xs">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                referrerPolicy="no-referrer"
-                className="w-6.5 h-6.5 rounded-full object-cover border border-emerald-400"
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
               />
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                className="relative group cursor-pointer shrink-0"
+                title="প্রোফাইল ছবি পরিবর্তন করুন"
+              >
+                {currentUser.avatar ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    referrerPolicy="no-referrer"
+                    className="w-6.5 h-6.5 rounded-full object-cover border border-emerald-400"
+                  />
+                ) : (
+                  <div className="w-6.5 h-6.5 rounded-full bg-slate-800 border border-emerald-400 flex items-center justify-center">
+                    <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
+                )}
+                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                  <Camera className="w-3 h-3 text-white" />
+                </div>
+              </button>
               <div className="hidden sm:inline-block">
                 <span className="font-bold text-slate-200 block max-w-[80px] truncate leading-none">
                   {currentUser.name}
