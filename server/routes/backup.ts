@@ -1,27 +1,74 @@
 import { Router, Response } from 'express';
 import pool from '../db';
-import bcrypt from 'bcryptjs';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
 router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const [income] = await pool.execute('SELECT id, date, time, service_type AS serviceType, amount, entered_by AS enteredBy, note, payment_method AS paymentMethod FROM income_records');
-    const [expenses] = await pool.execute('SELECT id, date, time, category, amount, entered_by AS enteredBy, note FROM expense_records');
-    const [bkash] = await pool.execute('SELECT id, date, time, type, amount, fee, entered_by AS enteredBy, note, ref_trx AS refTrx FROM bkash_records');
-    const [reminders] = await pool.execute('SELECT id, title, date, is_completed AS isCompleted FROM reminders');
+    const [income] = await pool.execute('SELECT * FROM income_records ORDER BY date DESC, time DESC');
+    const [expenses] = await pool.execute('SELECT * FROM expense_records ORDER BY date DESC, time DESC');
+    const [bkash] = await pool.execute('SELECT * FROM bkash_records ORDER BY date DESC, time DESC');
+    const [reminders] = await pool.execute('SELECT * FROM reminders ORDER BY date DESC');
     const [settings] = await pool.execute('SELECT * FROM settings WHERE id = 1');
-    const [services] = await pool.execute('SELECT service_key AS serviceKey, bangla, english, color, default_price AS defaultPrice, is_active AS isActive FROM services_metadata');
+    const [services] = await pool.execute('SELECT * FROM services_metadata ORDER BY sort_order');
+
+    const incomeList = (income as any[]).map(r => ({
+      id: r.id, date: r.date, time: r.time,
+      serviceType: r.service_type, amount: Number(r.amount),
+      enteredBy: r.entered_by, note: r.note || '',
+      paymentMethod: r.payment_method,
+    }));
+
+    const expenseList = (expenses as any[]).map(r => ({
+      id: r.id, date: r.date, time: r.time,
+      category: r.category, amount: Number(r.amount),
+      enteredBy: r.entered_by, note: r.note || '',
+    }));
+
+    const bkashList = (bkash as any[]).map(r => ({
+      id: r.id, date: r.date, time: r.time,
+      type: r.type, amount: Number(r.amount),
+      fee: r.fee != null ? Number(r.fee) : null,
+      enteredBy: r.entered_by, note: r.note || '',
+      refTrx: r.ref_trx || null,
+    }));
+
+    const reminderList = (reminders as any[]).map(r => ({
+      id: r.id, title: r.title, date: r.date,
+      isCompleted: !!r.is_completed,
+    }));
+
+    const s = (settings as any[])[0];
+    const settingsData = s ? {
+      isDarkMode: !!s.is_dark_mode,
+      pinLockEnabled: !!s.pin_lock_enabled,
+      dailyReminderText: s.daily_reminder_text || '',
+      expenseAlertThreshold: Number(s.expense_alert_threshold),
+      monthlyRent: Number(s.monthly_rent),
+      monthlyElectricity: Number(s.monthly_electricity),
+      monthlyInternet: Number(s.monthly_internet),
+      monthlySalary: Number(s.monthly_salary),
+      bkashBaseBalance: Number(s.bkash_base_balance),
+    } : {};
+
+    const servicesMetadata = (services as any[]).map(r => ({
+      serviceKey: r.service_key,
+      bangla: r.bangla,
+      english: r.english,
+      color: r.color,
+      defaultPrice: Number(r.default_price),
+      isActive: !!r.is_active,
+    }));
 
     res.json({
       exportDate: new Date().toISOString(),
-      incomeList: income,
-      expenseList: expenses,
-      bkashList: bkash,
-      reminderList: reminders,
-      settings: (settings as any[])[0] || {},
-      servicesMetadata: services,
+      incomeList,
+      expenseList,
+      bkashList,
+      reminderList,
+      settings: settingsData,
+      servicesMetadata,
     });
   } catch (err) {
     console.error('Export error:', err);
@@ -45,7 +92,6 @@ router.post('/reset', authMiddleware, async (req: AuthRequest, res: Response) =>
     await pool.execute('DELETE FROM services_metadata');
     await pool.execute('DELETE FROM users');
 
-    // Re-import and run seed
     const { initializeDatabase } = await import('../db');
     await initializeDatabase();
 
