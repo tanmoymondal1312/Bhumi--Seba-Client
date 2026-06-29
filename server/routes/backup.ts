@@ -12,6 +12,7 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
     const [reminders] = await pool.execute('SELECT * FROM reminders ORDER BY date DESC');
     const [settings] = await pool.execute('SELECT * FROM settings WHERE id = 1');
     const [services] = await pool.execute('SELECT * FROM services_metadata ORDER BY sort_order');
+    const [memos] = await pool.execute('SELECT * FROM memos ORDER BY date DESC, time DESC');
 
     const incomeList = (income as any[]).map(r => ({
       id: r.id, date: r.date, time: r.time,
@@ -69,6 +70,11 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
       reminderList,
       settings: settingsData,
       servicesMetadata,
+      memoList: (memos as any[]).map(r => ({
+        id: r.id, title: r.title, description: r.description || '',
+        amount: Number(r.amount), image: r.image ? '[base64]' : '',
+        enteredBy: r.entered_by, date: r.date, time: r.time,
+      })),
     });
   } catch (err) {
     console.error('Export error:', err);
@@ -88,6 +94,7 @@ router.post('/reset', authMiddleware, async (req: AuthRequest, res: Response) =>
     await pool.execute('DELETE FROM expense_records');
     await pool.execute('DELETE FROM bkash_records');
     await pool.execute('DELETE FROM reminders');
+    await pool.execute('DELETE FROM memos');
     await pool.execute('DELETE FROM settings');
     await pool.execute('DELETE FROM services_metadata');
     await pool.execute('DELETE FROM users');

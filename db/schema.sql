@@ -85,6 +85,19 @@ CREATE TABLE IF NOT EXISTS settings (
   cash_in_hand_override DECIMAL(12,2) DEFAULT NULL
 );
 
+CREATE TABLE IF NOT EXISTS memos (
+  id VARCHAR(50) PRIMARY KEY,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  amount DECIMAL(12,2) DEFAULT 0,
+  image MEDIUMTEXT,
+  entered_by VARCHAR(100) NOT NULL,
+  date VARCHAR(10) NOT NULL,
+  time VARCHAR(5) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_date (date)
+);
+
 CREATE TABLE IF NOT EXISTS services_metadata (
   service_key VARCHAR(50) PRIMARY KEY,
   bangla VARCHAR(200) NOT NULL,

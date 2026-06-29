@@ -13,6 +13,7 @@ import settingsRoutes from './routes/settings';
 import servicesRoutes from './routes/services';
 import backupRoutes from './routes/backup';
 import usersRoutes from './routes/users';
+import memosRoutes from './routes/memos';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/services', servicesRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/memos', memosRoutes);
 
 // Serve static frontend files in production
 const distPath = path.join(process.cwd(), 'dist');

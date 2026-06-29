@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, ExpenseRecord, ExpenseCategory } from '../types';
 import { EXPENSE_METADATA } from '../data/mockData';
+import { api } from '../api/client';
 import { getTodayStr, formatBanglaDate } from '../utils/finance';
-import { Layers, AlertTriangle, HelpCircle, Check, Trash2, Calendar, DollarSign } from 'lucide-react';
+import { Layers, AlertTriangle, HelpCircle, Check, Trash2, Calendar, DollarSign, StickyNote, ImagePlus, X, Eye, Plus } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenseList: ExpenseRecord[];
@@ -408,6 +409,271 @@ export default function ExpenseManager({
       </div>
     )}
 
+    {/* MEMO SECTION */}
+    <MemoPanel currentUser={currentUser} isOwner={isOwner} />
+
   </>
 );
+}
+
+function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boolean }) {
+  interface MemoRecord {
+    id: string; title: string; description: string;
+    amount: number; image: string;
+    enteredBy: string; date: string; time: string;
+  }
+
+  const [memos, setMemos] = useState<MemoRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState('');
+  const [imagePreview, setImagePreview] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [viewImage, setViewImage] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.memos.getAll()
+      .then(setMemos)
+      .catch(err => console.error('Load memos error:', err))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d')!;
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 800;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      setImagePreview(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.src = URL.createObjectURL(file);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    const now = new Date();
+    const date = getTodayStr();
+    const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+    try {
+      const created = await api.memos.create({
+        title: title.trim(),
+        description: description.trim(),
+        amount: parseFloat(amount) || 0,
+        image: imagePreview,
+        enteredBy: currentUser.name,
+        date, time,
+      });
+      setMemos(prev => [created, ...prev]);
+      setTitle(''); setDescription(''); setAmount(''); setImagePreview('');
+      setShowForm(false);
+      setSuccessMsg('মেমো সফলভাবে সংরক্ষণ করা হয়েছে!');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      console.error('Add memo error:', err);
+    }
+  };
+
+  const handleDelete = async (memo: MemoRecord) => {
+    if (!confirm(`"${memo.title}" মেমোটি মুছে ফেলতে চান?`)) return;
+    try {
+      await api.memos.delete(memo.id);
+      setMemos(prev => prev.filter(m => m.id !== memo.id));
+    } catch (err) {
+      console.error('Delete memo error:', err);
+    }
+  };
+
+  return (
+    <div className="mt-8 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4 mb-5">
+        <div>
+          <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full">
+            মেমো ও রিসিপ্ট বুক
+          </span>
+          <h3 className="text-base font-black text-white mt-1.5 flex items-center">
+            <StickyNote className="w-4.5 h-4.5 text-amber-400 mr-2 shrink-0" />
+            দোকান মেমো ও রিসিপ্ট সংরক্ষণ
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">যেকোনো গুরুত্বপূর্ণ মেমো, রিসিপ্ট বা ছবিসহ নোট এখানে সংরক্ষণ করুন।</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowForm(!showForm)}
+          className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition flex items-center space-x-1.5 shrink-0"
+        >
+          {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          <span>{showForm ? 'বন্ধ করুন' : 'নতুন মেমো যোগ করুন'}</span>
+        </button>
+      </div>
+
+      {successMsg && (
+        <div className="mb-4 bg-emerald-950/45 border border-emerald-800 text-emerald-300 p-3 rounded-2xl flex items-center space-x-2 text-xs">
+          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{successMsg}</span>
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={handleSubmit} className="bg-slate-950/60 border border-slate-850 rounded-2xl p-5 mb-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-slate-400 font-bold">মেমো শিরোনাম *</label>
+              <input
+                type="text" required value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="যেমন: প্রিন্টার কার্টিজ ক্রয়"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-white text-xs focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] text-slate-400 font-bold">খরচের পরিমাণ (ঐচ্ছিক)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-2 text-slate-500 font-bold text-xs">৳</span>
+                <input
+                  type="number" value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 pl-7 text-white text-xs font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] text-slate-400 font-bold">বিস্তারিত বিবরণ</label>
+            <textarea
+              rows={2} value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="মেমোর বিস্তারিত বিবরণ লিখুন..."
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl py-2 px-3 text-white text-xs focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] text-slate-400 font-bold">রিসিপ্ট / ছবি সংযুক্ত করুন</label>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+
+            {imagePreview ? (
+              <div className="relative inline-block">
+                <img src={imagePreview} alt="Preview" className="max-h-36 rounded-xl border border-slate-700 object-contain" />
+                <button
+                  type="button"
+                  onClick={() => setImagePreview('')}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center cursor-pointer text-xs hover:bg-red-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full py-6 border-2 border-dashed border-slate-700 hover:border-amber-500/50 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer transition group"
+              >
+                <ImagePlus className="w-8 h-8 text-slate-600 group-hover:text-amber-400 transition" />
+                <span className="text-[11px] text-slate-500 group-hover:text-slate-300 font-medium">ক্লিক করে ছবি নির্বাচন করুন</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-slate-500">ইনপুটদাতা: <strong className="text-slate-400">{currentUser.name}</strong> • {formatBanglaDate(getTodayStr())}</span>
+            <button
+              type="submit"
+              className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition flex items-center space-x-1"
+            >
+              <StickyNote className="w-3.5 h-3.5" />
+              <span>মেমো সংরক্ষণ করুন</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <div className="text-center py-8">
+          <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+        </div>
+      ) : memos.length === 0 ? (
+        <div className="text-center py-12">
+          <StickyNote className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+          <p className="text-sm text-slate-500 font-medium">কোনো মেমো নেই</p>
+          <p className="text-[11px] text-slate-600 mt-1">উপরের বাটনে ক্লিক করে প্রথম মেমো যোগ করুন</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {memos.map(memo => (
+            <div key={memo.id} className="bg-slate-950/70 border border-slate-850 rounded-2xl overflow-hidden hover:border-slate-700 transition group">
+              {memo.image && (
+                <div
+                  className="relative cursor-pointer"
+                  onClick={() => setViewImage(memo.image)}
+                >
+                  <img src={memo.image} alt={memo.title} className="w-full h-40 object-cover" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center">
+                    <Eye className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition" />
+                  </div>
+                </div>
+              )}
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="text-xs font-bold text-white leading-snug">{memo.title}</h4>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(memo)}
+                      className="text-slate-600 hover:text-red-400 p-1 rounded cursor-pointer transition shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {memo.description && (
+                  <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed line-clamp-2">{memo.description}</p>
+                )}
+                <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-850">
+                  {memo.amount > 0 ? (
+                    <span className="text-xs font-bold text-amber-400 font-mono">৳{memo.amount.toLocaleString()}</span>
+                  ) : (
+                    <span></span>
+                  )}
+                  <div className="text-[9px] text-slate-500 text-right">
+                    <span className="block font-mono">{memo.date} • {memo.time}</span>
+                    <span className="block">{memo.enteredBy}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {viewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={() => setViewImage(null)}>
+          <button
+            type="button"
+            onClick={() => setViewImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white cursor-pointer transition z-10"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img src={viewImage} alt="Full view" className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+    </div>
+  );
 }

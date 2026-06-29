@@ -150,6 +150,17 @@ export const api = {
       }),
   },
 
+  memos: {
+    getAll: () => request<any[]>('/memos'),
+    create: (data: any) =>
+      request('/memos', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request(`/memos/${id}`, { method: 'DELETE' }),
+  },
+
   backup: {
     export: () => request<any>('/backup/export'),
     reset: () => request('/backup/reset', { method: 'POST' }),
