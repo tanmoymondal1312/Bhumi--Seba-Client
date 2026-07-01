@@ -31,6 +31,7 @@ export default function IncomeManager({
   servicesMetadata
 }: IncomeManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
+  const isViewOnly = currentUser.role === 'OWNER_TWO';
 
   const todayStr = getTodayStr();
 
@@ -267,7 +268,8 @@ export default function IncomeManager({
 
         <div id="income-manager-tab" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       
-      {/* COLUMN 1: PREMIUM ENTRY PANEL */}
+      {/* COLUMN 1: PREMIUM ENTRY PANEL — hidden for view-only sub-owner */}
+      {!isViewOnly && (
       <div className="lg:col-span-1 space-y-6">
 
         {/* QUICK INCOME ENTRY WIDGET */}
@@ -512,6 +514,7 @@ export default function IncomeManager({
         </div>
       </div>
 
+      )}
       {/* COLUMN 2 & 3: DETAILS FILTER LOG TABLE */}
       <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-md flex flex-col justify-between">
         
@@ -646,7 +649,7 @@ export default function IncomeManager({
                                 <span>সংশোধন</span>
                               </button>
                             )}
-                            {onDeleteIncome && (
+                            {onDeleteIncome && !isViewOnly && (
                               <button
                                 id={`btn-delete-income-${record.id}`}
                                 onClick={() => setRecordToDelete(record)}
