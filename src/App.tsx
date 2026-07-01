@@ -561,12 +561,6 @@ export default function App() {
 
         {/* ACTIVE MAIN SCREEN CONTAINER */}
         <main className="flex-1 min-w-0">
-          {currentUser.role === 'OWNER_TWO' && (
-            <div className="flex items-center justify-center gap-2 py-1.5 px-4 bg-amber-500/8 border-b border-amber-500/15 text-amber-400/70 text-[10px]">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              <span>দর্শক মোড — তথ্য দেখতে পারবেন, পরিবর্তন করতে পারবেন না</span>
-            </div>
-          )}
           {activeTab === 'dashboard' && (
             <Dashboard
               incomeList={incomeList}

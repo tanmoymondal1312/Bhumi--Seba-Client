@@ -49,7 +49,6 @@ export default function BKashManager({
   onUpdateSettings
 }: BKashManagerProps) {
   const isOwner = currentUser.role !== 'STAFF';
-  const isViewOnly = currentUser.role === 'OWNER_TWO';
 
   // 1. FUND LOAD (CASH IN) FORM STATES
   const [loadAmount, setLoadAmount] = useState<string>('');
@@ -494,7 +493,7 @@ export default function BKashManager({
                 <div className="inline-flex items-center justify-center p-3 bg-pink-500 rounded-2xl shadow-lg shadow-pink-500/20 text-white">
                   <CreditCard className="w-6 h-6 animate-pulse" />
                 </div>
-                {!isEditingInitialBalance && !isViewOnly && (
+                {!isEditingInitialBalance && (
                   <button
                     onClick={() => {
                       setNewInitialBalanceVal(metrics.currentBalance.toString());
@@ -563,7 +562,7 @@ export default function BKashManager({
                 <div className="p-3 bg-rose-500/15 border border-rose-500/20 rounded-2xl text-rose-450 flex items-center justify-center">
                   <ArrowUpRight className="w-5 h-5 text-rose-450" />
                 </div>
-                {!isEditingTodaySpent && !isViewOnly ? (
+                {!isEditingTodaySpent ? (
                   <div className="flex gap-2">
                     {metrics.hasOverride && (
                       <button
@@ -709,9 +708,7 @@ export default function BKashManager({
 
               <button
                 type="submit"
-                disabled={isViewOnly}
-                title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
-                className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/15 transition flex items-center justify-center space-x-1 ${isViewOnly ? "bg-emerald-600 opacity-50 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] cursor-pointer"}`}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/15 transition cursor-pointer flex items-center justify-center space-x-1"
               >
                 <Check className="w-4 h-4" />
                 <span>বিকাশ ব্যালেন্স লোড করুন</span>
@@ -870,9 +867,7 @@ export default function BKashManager({
 
               <button
                 type="submit"
-                disabled={isViewOnly}
-                title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
-                className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-lg shadow-pink-650/15 transition flex items-center justify-center space-x-1 ${isViewOnly ? "bg-pink-650 opacity-50 cursor-not-allowed" : "bg-pink-650 hover:bg-pink-600 active:scale-[0.98] cursor-pointer"}`}
+                className="w-full py-2.5 bg-pink-650 hover:bg-pink-600 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg shadow-pink-650/15 transition cursor-pointer flex items-center justify-center space-x-1"
               >
                 <Check className="w-4 h-4" />
                 <span>সব খরচ একসাথে সেভ করুন</span>
@@ -1146,18 +1141,16 @@ export default function BKashManager({
                       <td className="py-3.5 px-3 text-right">
                         <div className="flex items-center justify-end space-x-2">
                           <button
-                            onClick={() => !isViewOnly && triggerEdit(record)}
-                            disabled={isViewOnly}
-                            title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : "সম্পাদনা বা পরিবর্তন"}
-                            className={`bg-slate-950/40 p-1.5 rounded-lg border border-slate-850 transition ${isViewOnly ? "text-slate-600 opacity-40 cursor-not-allowed" : "text-slate-400 hover:text-pink-400 cursor-pointer"}`}
+                            onClick={() => triggerEdit(record)}
+                            className="bg-slate-950/40 p-1.5 rounded-lg border border-slate-850 text-slate-400 hover:text-pink-400 transition cursor-pointer"
+                            title="সম্পাদনা বা পরিবর্তন"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => !isViewOnly && triggerDelete(record.id)}
-                            disabled={isViewOnly}
-                            title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : "লেনদেনটি মুছে ফেলুন"}
-                            className={`bg-slate-950/40 p-1.5 rounded-lg border border-slate-850 transition ${isViewOnly ? "text-slate-600 opacity-40 cursor-not-allowed" : "text-slate-400 hover:text-red-400 cursor-pointer"}`}
+                            onClick={() => triggerDelete(record.id)}
+                            className="bg-slate-950/40 p-1.5 rounded-lg border border-slate-850 text-slate-400 hover:text-red-400 transition cursor-pointer"
+                            title="লেনদেনটি মুছে ফেলুন"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

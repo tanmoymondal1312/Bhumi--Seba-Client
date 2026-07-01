@@ -31,7 +31,6 @@ export default function IncomeManager({
   servicesMetadata
 }: IncomeManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
-  const isViewOnly = currentUser.role === 'OWNER_TWO';
 
   const todayStr = getTodayStr();
 
@@ -504,9 +503,7 @@ export default function IncomeManager({
             <button
               id="btn-submit-income-entry"
               type="submit"
-              disabled={isViewOnly}
-              title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
-              className={`w-full py-2.5 text-center bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 transition ${isViewOnly ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-600 active:scale-95 cursor-pointer"}`}
+              className="w-full py-2.5 text-center bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 transition cursor-pointer"
             >
               সার্ভিস ইনকাম ডিক্লেয়ার করুন
             </button>
@@ -652,10 +649,9 @@ export default function IncomeManager({
                             {onDeleteIncome && (
                               <button
                                 id={`btn-delete-income-${record.id}`}
-                                onClick={() => !isViewOnly && setRecordToDelete(record)}
-                                disabled={isViewOnly}
-                                title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : "রেকর্ড মুছুন"}
-                                className={`inline-flex items-center gap-1 p-1 px-2.5 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-[10px] font-bold transition font-sans ${isViewOnly ? "opacity-40 cursor-not-allowed" : "hover:bg-red-500 hover:text-white hover:border-red-500/40 cursor-pointer"}`}
+                                onClick={() => setRecordToDelete(record)}
+                                className="inline-flex items-center gap-1 p-1 px-2.5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 hover:border-red-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer font-sans"
+                                title="রেকর্ড মুছুন"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span>ডিলিট</span>
@@ -928,8 +924,7 @@ export default function IncomeManager({
               </button>
               <button
                 type="submit"
-                disabled={isViewOnly}
-                className={`flex-1 py-2 px-4 bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow-lg ${isViewOnly ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-600 cursor-pointer"}`}
+                className="flex-1 py-2 px-4 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition shadow-lg cursor-pointer"
               >
                 সংরক্ষণ করুন
               </button>
