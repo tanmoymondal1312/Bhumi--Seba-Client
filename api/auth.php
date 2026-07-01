@@ -9,7 +9,7 @@ $m    = method();
 // GET /api/auth/users-list
 if ($m === 'GET' && $path === 'users-list') {
     $rows = $db->query(
-        'SELECT id, name, role, avatar, phone FROM users ORDER BY FIELD(role,"OWNER_ONE","OWNER_TWO","STAFF"), created_at'
+        'SELECT id, name, role, avatar, phone FROM users ORDER BY CASE role WHEN \'OWNER_ONE\' THEN 0 WHEN \'OWNER_TWO\' THEN 1 ELSE 2 END, created_at'
     )->fetchAll();
     jsonOut($rows);
 }
@@ -43,7 +43,7 @@ if ($m === 'POST' && $path === 'login') {
     }
 
     $token     = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+7 days'));
+    $expiresAt = gmdate('Y-m-d H:i:s', time() + 7 * 24 * 3600);
 
     $db->prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
        ->execute([$token, $user['id'], $expiresAt]);

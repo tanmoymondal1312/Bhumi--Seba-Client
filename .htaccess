@@ -11,6 +11,10 @@ RewriteBase /
     Order allow,deny
     Deny from all
 </Files>
+<FilesMatch "\.db$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
 
 # ── Pass Authorization header to PHP (required on many shared hosts) ──────────
 RewriteCond %{HTTP:Authorization} ^(.*)
