@@ -167,12 +167,31 @@ function createTables(PDO $pdo): void {
 }
 
 function seedIfEmpty(PDO $pdo): void {
-    $count = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
-    if ($count > 0) return;
-
     $ownerPin   = getenv('OWNER_PIN')   ?: '9999';
     $ownerName  = getenv('OWNER_NAME')  ?: 'মালিক';
     $ownerPhone = getenv('OWNER_PHONE') ?: '01700-000000';
+
+    $count = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
+    if ($count > 0) {
+        // Sync .env changes to owner1 on every startup
+        $owner = $pdo->query("SELECT name, pin, phone FROM users WHERE id = 'owner1'")->fetch();
+        if ($owner) {
+            $updates = [];
+            $vals    = [];
+            if ($owner['name'] !== $ownerName)  { $updates[] = 'name = ?';  $vals[] = $ownerName; }
+            if ($owner['phone'] !== $ownerPhone){ $updates[] = 'phone = ?'; $vals[] = $ownerPhone; }
+            if (!password_verify($ownerPin, $owner['pin'])) {
+                $updates[] = 'pin = ?';
+                $vals[]    = password_hash($ownerPin, PASSWORD_BCRYPT);
+            }
+            if ($updates) {
+                $vals[] = 'owner1';
+                $pdo->prepare('UPDATE users SET ' . implode(', ', $updates) . " WHERE id = ?")->execute($vals);
+            }
+        }
+        return;
+    }
+
     $hashedPin  = password_hash($ownerPin, PASSWORD_BCRYPT);
 
     $pdo->prepare(
