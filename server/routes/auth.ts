@@ -20,17 +20,25 @@ router.get('/users-list', async (_req: Request, res: Response) => {
 
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { userId, pin } = req.body;
+    const { userId, username, pin } = req.body;
 
-    if (!userId || !pin) {
-      res.status(400).json({ message: 'ইউজার এবং পিন দেওয়া আবশ্যক।' });
+    if ((!userId && !username) || !pin) {
+      res.status(400).json({ message: 'ইউজারনেম এবং পিন দেওয়া আবশ্যক।' });
       return;
     }
 
-    const [rows] = await pool.execute(
-      'SELECT id, name, role, pin, avatar, phone FROM users WHERE id = ?',
-      [userId]
-    );
+    let rows: any;
+    if (userId) {
+      [rows] = await pool.execute(
+        'SELECT id, name, role, pin, avatar, phone FROM users WHERE id = ?',
+        [userId]
+      );
+    } else {
+      [rows] = await pool.execute(
+        'SELECT id, name, role, pin, avatar, phone FROM users WHERE LOWER(name) = LOWER(?)',
+        [username.trim()]
+      );
+    }
 
     const users = rows as any[];
     if (users.length === 0) {

@@ -32,10 +32,10 @@ export const api = {
   auth: {
     usersList: () =>
       request<any[]>('/auth/users-list'),
-    login: (userId: string, pin: string) =>
+    login: (username: string, pin: string) =>
       request<{ token: string; user: any }>('/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ userId, pin }),
+        body: JSON.stringify({ username, pin }),
       }),
     logout: () =>
       request('/auth/logout', { method: 'POST' }),
