@@ -416,6 +416,18 @@ export default function ExpenseManager({
 );
 }
 
+const BANGLA_MONTHS: Record<string, string> = {
+  '01': 'জানুয়ারি', '02': 'ফেব্রুয়ারি', '03': 'মার্চ',
+  '04': 'এপ্রিল',   '05': 'মে',          '06': 'জুন',
+  '07': 'জুলাই',    '08': 'আগস্ট',       '09': 'সেপ্টেম্বর',
+  '10': 'অক্টোবর',  '11': 'নভেম্বর',     '12': 'ডিসেম্বর',
+};
+
+function getMonthLabel(ym: string) {
+  const [year, month] = ym.split('-');
+  return `${BANGLA_MONTHS[month] || month} ${year}`;
+}
+
 function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boolean }) {
   interface MemoRecord {
     id: string; title: string; description: string;
@@ -432,14 +444,31 @@ function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boole
   const [imagePreview, setImagePreview] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [viewImage, setViewImage] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.memos.getAll()
-      .then(setMemos)
+      .then(data => {
+        setMemos(data);
+        // Auto-select current month if it has memos
+        const currentYM = getTodayStr().substring(0, 7);
+        if (data.some((m: MemoRecord) => m.date.startsWith(currentYM))) {
+          setSelectedMonth(currentYM);
+        }
+      })
       .catch(err => console.error('Load memos error:', err))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // Unique months sorted newest first
+  const availableMonths: string[] = Array.from<string>(
+    new Set(memos.map(m => m.date.substring(0, 7)))
+  ).sort((a, b) => b.localeCompare(a));
+
+  const filteredMemos = selectedMonth === 'ALL'
+    ? memos
+    : memos.filter(m => m.date.startsWith(selectedMonth));
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -479,6 +508,7 @@ function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boole
       setMemos(prev => [created, ...prev]);
       setTitle(''); setDescription(''); setAmount(''); setImagePreview('');
       setShowForm(false);
+      setSelectedMonth(date.substring(0, 7));
       setSuccessMsg('মেমো সফলভাবে সংরক্ষণ করা হয়েছে!');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err) {
@@ -520,6 +550,43 @@ function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boole
           <span>{showForm ? 'বন্ধ করুন' : 'নতুন মেমো যোগ করুন'}</span>
         </button>
       </div>
+
+      {/* Month Filter */}
+      {availableMonths.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setSelectedMonth('ALL')}
+            className={`py-1.5 px-3 rounded-xl text-xs font-medium border cursor-pointer transition flex items-center gap-1.5 ${
+              selectedMonth === 'ALL'
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/50'
+                : 'bg-slate-950/40 text-slate-400 border-slate-800 hover:border-slate-700'
+            }`}
+          >
+            <Calendar className="w-3 h-3" />
+            সব মাস
+            <span className="text-[9px] font-mono opacity-70">({memos.length})</span>
+          </button>
+          {availableMonths.map((ym: string) => {
+            const count = memos.filter(m => m.date.startsWith(ym)).length;
+            return (
+              <button
+                key={ym}
+                type="button"
+                onClick={() => setSelectedMonth(ym)}
+                className={`py-1.5 px-3 rounded-xl text-xs font-medium border cursor-pointer transition flex items-center gap-1.5 ${
+                  selectedMonth === ym
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/50'
+                    : 'bg-slate-950/40 text-slate-400 border-slate-800 hover:border-slate-700'
+                }`}
+              >
+                {getMonthLabel(ym)}
+                <span className="text-[9px] font-mono opacity-70">({count})</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {successMsg && (
         <div className="mb-4 bg-emerald-950/45 border border-emerald-800 text-emerald-300 p-3 rounded-2xl flex items-center space-x-2 text-xs">
@@ -608,15 +675,30 @@ function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boole
         <div className="text-center py-8">
           <div className="w-6 h-6 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
         </div>
-      ) : memos.length === 0 ? (
+      ) : filteredMemos.length === 0 ? (
         <div className="text-center py-12">
           <StickyNote className="w-12 h-12 text-slate-700 mx-auto mb-3" />
-          <p className="text-sm text-slate-500 font-medium">কোনো মেমো নেই</p>
-          <p className="text-[11px] text-slate-600 mt-1">উপরের বাটনে ক্লিক করে প্রথম মেমো যোগ করুন</p>
+          {memos.length === 0 ? (
+            <>
+              <p className="text-sm text-slate-500 font-medium">কোনো মেমো নেই</p>
+              <p className="text-[11px] text-slate-600 mt-1">উপরের বাটনে ক্লিক করে প্রথম মেমো যোগ করুন</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-500 font-medium">{getMonthLabel(selectedMonth)} মাসে কোনো মেমো নেই</p>
+              <button
+                type="button"
+                onClick={() => setSelectedMonth('ALL')}
+                className="text-[11px] text-amber-400 hover:text-amber-300 mt-2 cursor-pointer transition"
+              >
+                সব মাসের মেমো দেখুন
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {memos.map(memo => (
+          {filteredMemos.map(memo => (
             <div key={memo.id} className="bg-slate-950/70 border border-slate-850 rounded-2xl overflow-hidden hover:border-slate-700 transition group">
               {memo.image && (
                 <div
