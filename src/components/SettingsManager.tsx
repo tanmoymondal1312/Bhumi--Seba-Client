@@ -425,7 +425,7 @@ export default function SettingsManager({
               <ResetWithPinVerify onResetData={onResetData} />
             ) : (
               <div className="text-[10px] text-slate-500 text-center py-2 italic">
-                * ডাটাবেজ রিসেট করার অধিকার শুধুমাত্র প্রধান মালিকের।
+                * ডাটাবেজ রিসেট করার অধিকার শুধুমাত্র মালিকের।
               </div>
             )}
 
@@ -807,7 +807,7 @@ function UserManagementPanel() {
   };
 
   const getRoleBangla = (role: string) => {
-    if (role === 'OWNER_ONE') return 'প্রধান মালিক';
+    if (role === 'OWNER_ONE') return 'মালিক';
     if (role === 'OWNER_TWO') return 'মালিক';
     return 'কর্মচারী';
   };
@@ -830,7 +830,7 @@ function UserManagementPanel() {
           <Users className="w-4.5 h-4.5 text-indigo-400 mr-2 shrink-0" />
           অ্যাকাউন্ট তৈরি, সম্পাদনা ও মুছে ফেলুন
         </h3>
-        <p className="text-[11px] text-slate-500 mt-1">এখান থেকে কর্মচারী বা অন্য মালিকের অ্যাকাউন্ট তৈরি করুন। প্রধান মালিকের পিন .env ফাইল থেকে নির্ধারিত হয়।</p>
+        <p className="text-[11px] text-slate-500 mt-1">এখান থেকে কর্মচারী বা অন্য মালিকের অ্যাকাউন্ট তৈরি করুন। মালিকের পিন .env ফাইল থেকে নির্ধারিত হয়।</p>
       </div>
 
       {actionMsg && (
