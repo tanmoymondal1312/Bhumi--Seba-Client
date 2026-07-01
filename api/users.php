@@ -8,7 +8,7 @@ $id = $_GET['id'] ?? null;
 
 // GET /api/users
 if ($m === 'GET') {
-    requireOwner($db);
+    requireAuth($db);
     $rows = $db->query(
         'SELECT id, name, role, avatar, phone, created_at FROM users ORDER BY CASE role WHEN \'OWNER_ONE\' THEN 0 WHEN \'OWNER_TWO\' THEN 1 ELSE 2 END, created_at'
     )->fetchAll();
