@@ -1197,12 +1197,6 @@ export default function Dashboard({
             </p>
             
             <div className="space-y-2">
-              {currentUser.role !== 'STAFF' && (
-                <div className="flex justify-between text-xs py-1.5 border-b border-slate-800">
-                  <span className="text-slate-400">মোট ইউজার</span>
-                  <span className="text-slate-200 font-mono font-bold">৩ জন নিবন্ধিত</span>
-                </div>
-              )}
               <div className="flex justify-between text-xs py-1.5 border-b border-slate-800">
                 <span className="text-slate-450">ডাটা ব্যাকআপ</span>
                 <span className="text-indigo-400 font-bold">স্বয়ংক্রিয় ক্লাউড</span>
