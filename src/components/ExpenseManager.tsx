@@ -26,6 +26,7 @@ export default function ExpenseManager({
   onDeleteExpense
 }: ExpenseManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
+  const isViewOnly = currentUser.role === 'OWNER_TWO';
 
   const getDisplayName = (name: string) => {
     if (currentUser.role === 'STAFF') {
@@ -206,7 +207,9 @@ export default function ExpenseManager({
           <button
             id="btn-submit-expense-entry"
             type="submit"
-            className="w-full py-2.5 text-center bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/10 active:scale-95 transition cursor-pointer"
+            disabled={isViewOnly}
+            title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+            className={`w-full py-2.5 text-center bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/10 transition ${isViewOnly ? "opacity-50 cursor-not-allowed" : "hover:bg-indigo-600 active:scale-95 cursor-pointer"}`}
           >
             দোকানের খরচ লিপিবদ্ধ করুন
           </button>
@@ -325,7 +328,9 @@ export default function ExpenseManager({
                           <td className="py-3 px-2 text-right">
                             <button
                               id={`btn-delete-expense-${record.id}`}
+                              disabled={isViewOnly}
                               onClick={() => {
+                                if (isViewOnly) return;
                                 setConfirmDialog({
                                   isOpen: true,
                                   title: 'খরচ মুছে ফেলার নিশ্চয়তা',
@@ -336,8 +341,8 @@ export default function ExpenseManager({
                                   }
                                 });
                               }}
-                              className="text-slate-500 hover:text-red-400 p-1 rounded-lg hover:bg-slate-950 transition cursor-pointer"
-                              title="খরচ মুছুন"
+                              title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : "খরচ মুছুন"}
+                              className={`p-1 rounded-lg transition ${isViewOnly ? "text-slate-600 opacity-40 cursor-not-allowed" : "text-slate-500 hover:text-red-400 hover:bg-slate-950 cursor-pointer"}`}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -410,7 +415,7 @@ export default function ExpenseManager({
     )}
 
     {/* MEMO SECTION */}
-    <MemoPanel currentUser={currentUser} isOwner={isOwner} />
+    <MemoPanel currentUser={currentUser} isOwner={isOwner} isViewOnly={isViewOnly} />
 
   </>
 );
@@ -428,7 +433,7 @@ function getMonthLabel(ym: string) {
   return `${BANGLA_MONTHS[month] || month} ${year}`;
 }
 
-function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boolean }) {
+function MemoPanel({ currentUser, isOwner, isViewOnly }: { currentUser: User; isOwner: boolean; isViewOnly: boolean }) {
   interface MemoRecord {
     id: string; title: string; description: string;
     amount: number; image: string;
@@ -662,7 +667,9 @@ function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boole
             <span className="text-[10px] text-slate-500">ইনপুটদাতা: <strong className="text-slate-400">{currentUser.name}</strong> • {formatBanglaDate(getTodayStr())}</span>
             <button
               type="submit"
-              className="px-6 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition flex items-center space-x-1"
+              disabled={isViewOnly}
+              title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+              className={`px-6 py-2.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-xl transition flex items-center space-x-1 ${isViewOnly ? "opacity-50 cursor-not-allowed" : "hover:bg-amber-600 cursor-pointer"}`}
             >
               <StickyNote className="w-3.5 h-3.5" />
               <span>মেমো সংরক্ষণ করুন</span>
@@ -717,8 +724,10 @@ function MemoPanel({ currentUser, isOwner }: { currentUser: User; isOwner: boole
                   {isOwner && (
                     <button
                       type="button"
-                      onClick={() => handleDelete(memo)}
-                      className="text-slate-600 hover:text-red-400 p-1 rounded cursor-pointer transition shrink-0"
+                      disabled={isViewOnly}
+                      onClick={() => !isViewOnly && handleDelete(memo)}
+                      title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+                      className={`p-1 rounded transition shrink-0 ${isViewOnly ? "text-slate-700 opacity-40 cursor-not-allowed" : "text-slate-600 hover:text-red-400 cursor-pointer"}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

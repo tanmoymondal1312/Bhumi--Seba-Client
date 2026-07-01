@@ -40,6 +40,7 @@ export default function SettingsManager({
   onUpdateServicesMetadata
 }: SettingsManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
+  const isViewOnly = currentUser.role === 'OWNER_TWO';
   const isPrimaryOwner = currentUser.role === 'OWNER_ONE';
 
   // Custom service type configurations variables
@@ -203,8 +204,10 @@ export default function SettingsManager({
             </div>
             <button
               id="btn-toggle-pin-lock"
-              onClick={() => onUpdateSettings({ pinLockEnabled: !settings.pinLockEnabled })}
-              className={`w-11 h-6 rounded-full p-1 transition cursor-pointer ${
+              disabled={isViewOnly}
+              title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+              onClick={() => !isViewOnly && onUpdateSettings({ pinLockEnabled: !settings.pinLockEnabled })}
+              className={`w-11 h-6 rounded-full p-1 transition ${isViewOnly ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${
                 settings.pinLockEnabled ? 'bg-emerald-500' : 'bg-slate-800'
               }`}
             >
@@ -350,7 +353,9 @@ export default function SettingsManager({
               <button
                 id="btn-add-reminder"
                 type="submit"
-                className="py-2.5 bg-emerald-500 hover:bg-emerald-600 font-bold text-xs rounded-xl text-slate-950 cursor-pointer flex items-center justify-center space-x-1 text-center"
+                disabled={isViewOnly}
+                title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+                className={`py-2.5 bg-emerald-500 font-bold text-xs rounded-xl text-slate-950 flex items-center justify-center space-x-1 text-center ${isViewOnly ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-600 cursor-pointer"}`}
               >
                 <Plus className="w-4 h-4 shrink-0" />
                 <span>রিমাইন্ডার যুক্ত করুন</span>
@@ -376,8 +381,10 @@ export default function SettingsManager({
                     <span className="font-mono text-[9px] text-slate-500">{rem.date}</span>
                     <button
                       id={`btn-delete-rem-${rem.id}`}
-                      onClick={() => onDeleteReminder(rem.id)}
-                      className="text-slate-500 hover:text-red-400 p-0.5 rounded cursor-pointer"
+                      disabled={isViewOnly}
+                      onClick={() => !isViewOnly && onDeleteReminder(rem.id)}
+                      title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+                      className={`p-0.5 rounded transition ${isViewOnly ? "text-slate-700 opacity-40 cursor-not-allowed" : "text-slate-500 hover:text-red-400 cursor-pointer"}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -504,6 +511,7 @@ export default function SettingsManager({
                           type="number"
                           value={meta.defaultPrice}
                           onChange={(e) => {
+                            if (isViewOnly) return;
                             const val = parseFloat(e.target.value);
                             const price = isNaN(val) ? 0 : val;
                             const updatedMetadata = {
@@ -515,15 +523,17 @@ export default function SettingsManager({
                             };
                             onUpdateServicesMetadata(updatedMetadata);
                           }}
-                          className="w-20 bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500 text-center"
+                          disabled={isViewOnly}
+                          className={`w-20 bg-slate-950 border border-slate-800 rounded-lg py-1 px-2 text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-indigo-500 text-center ${isViewOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
                         />
                       </div>
 
                       <button
                         id={`btn-delete-service-${key}`}
-                        onClick={() => handleDeleteServiceType(key)}
-                        className="text-slate-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded-xl cursor-pointer transition shrink-0"
-                        title="ডিলিট করুন"
+                        disabled={isViewOnly}
+                        onClick={() => !isViewOnly && handleDeleteServiceType(key)}
+                        title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : "ডিলিট করুন"}
+                        className={`p-1.5 rounded-xl transition shrink-0 ${isViewOnly ? "text-slate-700 opacity-40 cursor-not-allowed" : "text-slate-500 hover:text-red-400 hover:bg-red-500/10 cursor-pointer"}`}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -578,7 +588,9 @@ export default function SettingsManager({
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 font-bold text-xs rounded-xl text-slate-950 cursor-pointer flex items-center justify-center space-x-1"
+                disabled={isViewOnly}
+                title={isViewOnly ? "মালিকের অনুমতি প্রয়োজন" : undefined}
+                className={`w-full py-2.5 bg-emerald-500 font-bold text-xs rounded-xl text-slate-950 flex items-center justify-center space-x-1 ${isViewOnly ? "opacity-50 cursor-not-allowed" : "hover:bg-emerald-600 cursor-pointer"}`}
               >
                 <Plus className="w-4 h-4 shrink-0" />
                 <span>সার্ভিস যোগ করুন (Add Service)</span>
