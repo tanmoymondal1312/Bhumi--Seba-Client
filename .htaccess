@@ -1,0 +1,64 @@
+Options -Indexes
+RewriteEngine On
+RewriteBase /
+
+# ── Protect sensitive files ───────────────────────────────────────────────────
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+<Files "db.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# ── Pass Authorization header to PHP (required on many shared hosts) ──────────
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+# ── API routing ───────────────────────────────────────────────────────────────
+
+# /api/auth/*
+RewriteRule ^api/auth/(.+)$ api/auth.php?_path=$1 [L,QSA]
+
+# /api/users/:id
+RewriteRule ^api/users/([^/]+)$ api/users.php?id=$1 [L,QSA]
+RewriteRule ^api/users$ api/users.php [L,QSA]
+
+# /api/income/:id
+RewriteRule ^api/income/([^/]+)$ api/income.php?id=$1 [L,QSA]
+RewriteRule ^api/income$ api/income.php [L,QSA]
+
+# /api/expenses/:id
+RewriteRule ^api/expenses/([^/]+)$ api/expenses.php?id=$1 [L,QSA]
+RewriteRule ^api/expenses$ api/expenses.php [L,QSA]
+
+# /api/bkash/:id
+RewriteRule ^api/bkash/([^/]+)$ api/bkash.php?id=$1 [L,QSA]
+RewriteRule ^api/bkash$ api/bkash.php [L,QSA]
+
+# /api/reminders/:id/toggle  (must be before /:id rule)
+RewriteRule ^api/reminders/([^/]+)/toggle$ api/reminders.php?id=$1&action=toggle [L,QSA]
+RewriteRule ^api/reminders/([^/]+)$ api/reminders.php?id=$1 [L,QSA]
+RewriteRule ^api/reminders$ api/reminders.php [L,QSA]
+
+# /api/settings
+RewriteRule ^api/settings$ api/settings.php [L,QSA]
+
+# /api/memos/:id
+RewriteRule ^api/memos/([^/]+)$ api/memos.php?id=$1 [L,QSA]
+RewriteRule ^api/memos$ api/memos.php [L,QSA]
+
+# /api/services/:key/toggle  (must be before /:key rule)
+RewriteRule ^api/services/([^/]+)/toggle$ api/services.php?key=$1&action=toggle [L,QSA]
+RewriteRule ^api/services/([^/]+)$ api/services.php?key=$1 [L,QSA]
+RewriteRule ^api/services$ api/services.php [L,QSA]
+
+# /api/backup/export|reset
+RewriteRule ^api/backup/([^/]+)$ api/backup.php?action=$1 [L,QSA]
+
+# ── SPA fallback — serve index.html for all non-file, non-api routes ─────────
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/api/
+RewriteRule ^ index.html [L]
