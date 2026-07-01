@@ -148,6 +148,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <div className="text-slate-500 text-[11px] font-medium tracking-wide">
           ভূমি সেবা সহায়তা কেন্দ্র © ২০২৬
         </div>
+        <p className="text-[21px] font-black text-slate-300 tracking-tight">Powered by Prime Network</p>
         <a
           href="https://mediaghor.com"
           target="_blank"
