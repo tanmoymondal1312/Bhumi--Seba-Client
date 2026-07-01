@@ -18,13 +18,16 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
 });
 
+// Force utf8mb4 on EVERY new connection in the pool.
+// cPanel MySQL servers often default to latin1, which corrupts Bangla text.
+// This ensures each connection explicitly uses utf8mb4 regardless of server default.
+(pool as any).pool?.on('connection', (conn: any) => {
+  conn.query("SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci'");
+});
+
 export default pool;
 
 export async function initializeDatabase() {
-  // Ensure Bangla/Unicode text is stored and retrieved correctly
-  await pool.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-  await pool.execute("SET CHARACTER SET utf8mb4");
-
   const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
