@@ -497,13 +497,9 @@ export default function App() {
                 <span className="font-bold text-slate-200 block max-w-[80px] truncate leading-none">
                   {currentUser.name}
                 </span>
-                {currentUser.role === 'OWNER_ONE' ? (
-                  <ShieldCheck className="w-3 h-3 text-emerald-400 mt-0.5" />
-                ) : (
-                  <span className="text-[9px] text-emerald-400 block mt-0.5 leading-none">
-                    {currentUser.role === 'STAFF' ? 'কর্মচারী' : 'মালিক'}
-                  </span>
-                )}
+                <span className="text-[9px] text-emerald-400 block mt-0.5 leading-none">
+                  {currentUser.role === 'STAFF' ? 'কর্মচারী' : 'মালিক'}
+                </span>
               </div>
             </div>
 

@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { User, SystemSettings, QuickReminder } from '../types';
 import { api } from '../api/client';
 import {
-  Settings, Key, AlertTriangle, ShieldAlert, ShieldCheck,
+  Settings, Key, AlertTriangle, ShieldAlert,
   CloudLightning, RefreshCw, CalendarDays, Plus, Trash2,
   Sun, Moon, Users, CheckCircle2, UserPlus, Pencil, X, Save, UserCheck
 } from 'lucide-react';
@@ -39,8 +39,7 @@ export default function SettingsManager({
   servicesMetadata,
   onUpdateServicesMetadata
 }: SettingsManagerProps) {
-  const isOwner = currentUser.role === 'OWNER_ONE';
-  const isViewOnly = currentUser.role === 'OWNER_TWO';
+  const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
   const isPrimaryOwner = currentUser.role === 'OWNER_ONE';
 
   // Custom service type configurations variables
@@ -204,9 +203,8 @@ export default function SettingsManager({
             </div>
             <button
               id="btn-toggle-pin-lock"
-              onClick={() => !isViewOnly && onUpdateSettings({ pinLockEnabled: !settings.pinLockEnabled })}
-              disabled={isViewOnly}
-              className={`w-11 h-6 rounded-full p-1 transition ${isViewOnly ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${
+              onClick={() => onUpdateSettings({ pinLockEnabled: !settings.pinLockEnabled })}
+              className={`w-11 h-6 rounded-full p-1 transition cursor-pointer ${
                 settings.pinLockEnabled ? 'bg-emerald-500' : 'bg-slate-800'
               }`}
             >
@@ -322,7 +320,7 @@ export default function SettingsManager({
             আগামী দিনের রিমাইন্ডার যুক্ত করুন
           </h3>
 
-          {!isViewOnly && <form onSubmit={handleReminderSubmit} className="space-y-3 mb-5">
+          <form onSubmit={handleReminderSubmit} className="space-y-3 mb-5">
             <div className="space-y-1.5">
               <label className="text-[11px] text-slate-400 font-semibold font-sans">কাজের সংক্ষিপ্ত টাইটেল</label>
               <input
@@ -358,7 +356,7 @@ export default function SettingsManager({
                 <span>রিমাইন্ডার যুক্ত করুন</span>
               </button>
             </div>
-          </form>}
+          </form>
 
           {/* Current listing list */}
           <div className="text-xs text-slate-400 mb-2 font-bold select-none uppercase tracking-wider">রিমাইন্ডার তালিকা</div>
@@ -376,13 +374,13 @@ export default function SettingsManager({
                   </div>
                   <div className="flex items-center space-x-2 shrink-0">
                     <span className="font-mono text-[9px] text-slate-500">{rem.date}</span>
-                    {!isViewOnly && <button
+                    <button
                       id={`btn-delete-rem-${rem.id}`}
                       onClick={() => onDeleteReminder(rem.id)}
                       className="text-slate-500 hover:text-red-400 p-0.5 rounded cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                    </button>}
+                    </button>
                   </div>
                 </div>
               ))
@@ -938,16 +936,9 @@ function UserManagementPanel() {
                         <div>
                           <span className="text-xs font-bold text-slate-200">{user.name}</span>
                           <div className="flex items-center space-x-2 mt-0.5">
-                            {user.role === 'OWNER_ONE' ? (
-                              <span className={`flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${getRoleColor(user.role)}`}>
-                                <ShieldCheck className="w-3 h-3" />
-                                অ্যাডমিন
-                              </span>
-                            ) : (
-                              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${getRoleColor(user.role)}`}>
-                                {getRoleBangla(user.role)}
-                              </span>
-                            )}
+                            <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${getRoleColor(user.role)}`}>
+                              {getRoleBangla(user.role)}
+                            </span>
                             {user.phone && <span className="text-[9px] text-slate-500 font-mono">{user.phone}</span>}
                           </div>
                         </div>

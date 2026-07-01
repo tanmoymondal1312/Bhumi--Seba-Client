@@ -25,8 +25,7 @@ export default function ExpenseManager({
   onAddExpense,
   onDeleteExpense
 }: ExpenseManagerProps) {
-  const isOwner = currentUser.role === 'OWNER_ONE';
-  const isViewOnly = currentUser.role === 'OWNER_TWO';
+  const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
 
   const getDisplayName = (name: string) => {
     if (currentUser.role === 'STAFF') {

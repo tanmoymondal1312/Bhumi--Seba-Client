@@ -44,7 +44,6 @@ export default function Dashboard({
   onUpdateSettings
 }: DashboardProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
-  const isViewOnly = currentUser.role === 'OWNER_TWO';
 
   // English to Bangla digits conversion helper
   const toBanglaDigits = (num: number | string): string => {
@@ -438,7 +437,6 @@ export default function Dashboard({
         </div>
 
         {/* Dynamic Greeting CTA Buttons */}
-        {!isViewOnly && (
         <div className="flex items-center space-x-2.5 z-10">
           <button
             id="btn-add-income-shortcut"
@@ -458,7 +456,6 @@ export default function Dashboard({
             <span>ব্যয় এন্ট্রি</span>
           </button>
         </div>
-        )}
       </div>
 
       {/* MOTIVATIONAL QUOTE BAR */}
