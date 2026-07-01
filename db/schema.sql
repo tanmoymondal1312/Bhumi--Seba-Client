@@ -1,6 +1,8 @@
 -- Bhumi Seva Hisab - MySQL Database Schema
 -- Run this file to create all required tables
 
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(50) PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -9,7 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
   avatar MEDIUMTEXT,
   phone VARCHAR(20) DEFAULT '',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS sessions (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -20,7 +22,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   INDEX idx_token (token),
   INDEX idx_expires (expires_at)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS income_records (
   id VARCHAR(50) PRIMARY KEY,
@@ -33,7 +35,7 @@ CREATE TABLE IF NOT EXISTS income_records (
   payment_method ENUM('CASH', 'BKASH') NOT NULL DEFAULT 'CASH',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_date (date)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS expense_records (
   id VARCHAR(50) PRIMARY KEY,
@@ -45,7 +47,7 @@ CREATE TABLE IF NOT EXISTS expense_records (
   note TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_date (date)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS bkash_records (
   id VARCHAR(50) PRIMARY KEY,
@@ -59,7 +61,7 @@ CREATE TABLE IF NOT EXISTS bkash_records (
   ref_trx VARCHAR(50) DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_date (date)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS reminders (
   id VARCHAR(50) PRIMARY KEY,
@@ -67,7 +69,7 @@ CREATE TABLE IF NOT EXISTS reminders (
   date VARCHAR(10) NOT NULL,
   is_completed BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS settings (
   id INT PRIMARY KEY DEFAULT 1,
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS settings (
   bkash_base_balance DECIMAL(12,2) DEFAULT 12500,
   bkash_today_spent_override DECIMAL(12,2) DEFAULT NULL,
   cash_in_hand_override DECIMAL(12,2) DEFAULT NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS memos (
   id VARCHAR(50) PRIMARY KEY,
@@ -96,7 +98,7 @@ CREATE TABLE IF NOT EXISTS memos (
   time VARCHAR(5) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_date (date)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS services_metadata (
   service_key VARCHAR(50) PRIMARY KEY,
@@ -106,4 +108,4 @@ CREATE TABLE IF NOT EXISTS services_metadata (
   default_price DECIMAL(12,2) NOT NULL,
   is_active BOOLEAN DEFAULT TRUE,
   sort_order INT DEFAULT 0
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

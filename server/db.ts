@@ -15,11 +15,16 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  charset: 'utf8mb4',
 });
 
 export default pool;
 
 export async function initializeDatabase() {
+  // Ensure Bangla/Unicode text is stored and retrieved correctly
+  await pool.execute("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
+  await pool.execute("SET CHARACTER SET utf8mb4");
+
   const schemaPath = path.join(process.cwd(), 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
 
