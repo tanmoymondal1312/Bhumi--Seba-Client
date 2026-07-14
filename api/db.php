@@ -164,12 +164,59 @@ function createTables(PDO $pdo): void {
             sort_order    INTEGER DEFAULT 0
         )
     ");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS dues (
+            id            TEXT PRIMARY KEY,
+            customer_name TEXT NOT NULL,
+            phone         TEXT DEFAULT '',
+            service_type  TEXT DEFAULT 'OTHERS',
+            amount        REAL NOT NULL,
+            note          TEXT DEFAULT '',
+            date          TEXT NOT NULL,
+            entered_by    TEXT NOT NULL,
+            created_at    TEXT DEFAULT (datetime('now'))
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_dues_date ON dues(date)");
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS expense_categories (
+            category_key TEXT PRIMARY KEY,
+            bangla       TEXT NOT NULL,
+            english      TEXT DEFAULT '',
+            color        TEXT DEFAULT 'bg-slate-500',
+            is_fixed     INTEGER DEFAULT 0,
+            sort_order   INTEGER DEFAULT 0,
+            is_active    INTEGER DEFAULT 1
+        )
+    ");
 }
 
 function seedIfEmpty(PDO $pdo): void {
     $ownerPin   = getenv('OWNER_PIN')   ?: '9999';
     $ownerName  = getenv('OWNER_NAME')  ?: 'মালিক';
     $ownerPhone = getenv('OWNER_PHONE') ?: '01700-000000';
+
+    // Seed default expense categories (runs for existing deployments too)
+    $catCount = (int) $pdo->query('SELECT COUNT(*) FROM expense_categories')->fetchColumn();
+    if ($catCount === 0) {
+        $cats = [
+            ['RENT',        'ঘর ভাড়া',              'Shop Rent',            'bg-red-500',     1, 1],
+            ['ELECTRICITY', 'কারেন্ট বিল',           'Electricity Bill',     'bg-yellow-500',  1, 2],
+            ['INTERNET',    'ইন্টারনেট বিল',         'WiFi & Internet',      'bg-indigo-500',  1, 3],
+            ['SALARY',      'কর্মচারী বেতন',         'Staff Salaries',       'bg-blue-600',    1, 4],
+            ['OFFICE',      'অফিস খরচ/চা-নাস্তা',   'Office Tea & Snacks',  'bg-amber-500',   0, 5],
+            ['TRAVEL',      'যাতায়াত খরচ',          'Travel & Courier',     'bg-purple-500',  0, 6],
+            ['PRINT',       'প্রিন্ট/ফটোকপি পেপার', 'Paper & Stationery',   'bg-emerald-500', 0, 7],
+            ['OTHERS',      'অন্যান্য খরচ',          'Miscellaneous',        'bg-slate-500',   0, 8],
+        ];
+        $stmt = $pdo->prepare(
+            'INSERT INTO expense_categories (category_key, bangla, english, color, is_fixed, sort_order, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, 1)'
+        );
+        foreach ($cats as $c) $stmt->execute($c);
+    }
 
     $count = (int) $pdo->query('SELECT COUNT(*) FROM users')->fetchColumn();
     if ($count > 0) {

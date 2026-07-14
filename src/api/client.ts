@@ -161,6 +161,33 @@ export const api = {
       request(`/memos/${id}`, { method: 'DELETE' }),
   },
 
+  dues: {
+    getAll: () => request<any[]>('/dues'),
+    create: (data: any) =>
+      request('/dues', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    pay: (id: string, data: { date: string; time: string; enteredBy: string; paymentMethod?: string }) =>
+      request<{ income: any; deletedDueId: string }>(`/dues/${id}/pay`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request(`/dues/${id}`, { method: 'DELETE' }),
+  },
+
+  categories: {
+    getAll: () => request<any[]>('/categories'),
+    create: (data: any) =>
+      request('/categories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    delete: (key: string) =>
+      request(`/categories/${key}`, { method: 'DELETE' }),
+  },
+
   backup: {
     export: () => request<any>('/backup/export'),
     reset: () => request('/backup/reset', { method: 'POST' }),

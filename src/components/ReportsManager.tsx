@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { User, IncomeRecord, ExpenseRecord, BKashRecord } from '../types';
+import { User, IncomeRecord, ExpenseRecord, BKashRecord, DueRecord } from '../types';
 import { SERVICE_METADATA, EXPENSE_METADATA } from '../data/mockData';
 import { getDailyIncomeMetrics, getIncomeSum, getTodayStr, formatBanglaDate } from '../utils/finance';
 import { 
   TrendingUp, TrendingDown, Clock, Award, AlertCircle, 
   Download, Printer, FileSpreadsheet, CheckCircle2, RefreshCw,
-  ShieldCheck, Calendar, DollarSign, Layers, Receipt, ArrowUpRight, ArrowDownLeft, Percent
+  ShieldCheck, Calendar, DollarSign, Layers, Receipt, ArrowUpRight, ArrowDownLeft, Percent,
+  BookOpen, UserRound
 } from 'lucide-react';
 
 interface ReportsManagerProps {
@@ -19,10 +20,39 @@ interface ReportsManagerProps {
   bkashList: BKashRecord[];
   currentUser: User;
   servicesMetadata?: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>;
+  duesList?: DueRecord[];
 }
 
-export default function ReportsManager({ incomeList, expenseList, bkashList = [], currentUser, servicesMetadata }: ReportsManagerProps) {
+export default function ReportsManager({ incomeList, expenseList, bkashList = [], currentUser, servicesMetadata, duesList = [] }: ReportsManagerProps) {
   const isOwner = currentUser.role !== 'STAFF';
+
+  // বাকির খাতা — group outstanding dues by customer
+  const duesByCustomer = useMemo(() => {
+    const map = new Map<string, { customerName: string; phone: string; total: number; count: number; oldest: string; notes: string[] }>();
+    for (const due of duesList) {
+      const key = due.customerName.trim();
+      const entry = map.get(key);
+      if (entry) {
+        entry.total += due.amount;
+        entry.count += 1;
+        if (due.date < entry.oldest) entry.oldest = due.date;
+        if (due.note) entry.notes.push(due.note);
+        if (!entry.phone && due.phone) entry.phone = due.phone;
+      } else {
+        map.set(key, {
+          customerName: key,
+          phone: due.phone || '',
+          total: due.amount,
+          count: 1,
+          oldest: due.date,
+          notes: due.note ? [due.note] : [],
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [duesList]);
+
+  const duesGrandTotal = duesByCustomer.reduce((s, d) => s + d.total, 0);
 
   // Dynamic Months List
   const sortedMonthsList = useMemo(() => {
@@ -1355,6 +1385,81 @@ ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}:
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* বাকির খাতা রিপোর্ট — কার কাছে কত টাকা বাকি */}
+      <div id="dues-report-card" className="bg-slate-900 border border-amber-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-72 h-72 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-800 pb-4 mb-5">
+          <div>
+            <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full">
+              বাকির খাতা রিপোর্ট (Outstanding Dues Report)
+            </span>
+            <h3 className="text-base font-black text-white mt-1.5 flex items-center">
+              <BookOpen className="w-4.5 h-4.5 text-amber-400 mr-2 shrink-0" />
+              কোন গ্রাহকের কাছে কত টাকা বাকি আছে
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1">সার্ভিস ইনকাম পেজের বাকির খাতায় থাকা সব চলমান (অপরিশোধিত) বাকির সারসংক্ষেপ।</p>
+          </div>
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl px-5 py-3 text-center shrink-0">
+            <span className="text-[10px] text-amber-400 font-bold uppercase block">মোট বাকি পাওনা</span>
+            <span className="text-xl font-black font-mono text-amber-300">৳{duesGrandTotal.toLocaleString('bn-BD')}</span>
+            <span className="text-[9px] text-slate-500 block">{duesByCustomer.length.toLocaleString('bn-BD')} জন গ্রাহক</span>
+          </div>
+        </div>
+
+        {duesByCustomer.length === 0 ? (
+          <div className="text-center py-8">
+            <CheckCircle2 className="w-8 h-8 text-emerald-500/50 mx-auto mb-2" />
+            <p className="text-xs text-slate-500 italic">কোনো বাকি পাওনা নেই — সব হিসাব পরিষ্কার!</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-500 border-b border-slate-800 text-left">
+                  <th className="py-2.5 px-2 font-semibold">গ্রাহকের নাম</th>
+                  <th className="py-2.5 px-2 font-semibold">মোবাইল</th>
+                  <th className="py-2.5 px-2 font-semibold text-center">কয়টি বাকি</th>
+                  <th className="py-2.5 px-2 font-semibold">সবচেয়ে পুরনো</th>
+                  <th className="py-2.5 px-2 font-semibold text-right">মোট বাকি (৳)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {duesByCustomer.map(cust => (
+                  <tr key={cust.customerName} className="border-b border-slate-850/60 hover:bg-slate-950/50 transition">
+                    <td className="py-2.5 px-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+                          <UserRound className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-200 block">{cust.customerName}</span>
+                          {cust.notes.length > 0 && (
+                            <span className="text-[9px] text-slate-500 block truncate max-w-[200px]">{cust.notes.join(', ')}</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-2 font-mono text-slate-400">{cust.phone || '—'}</td>
+                    <td className="py-2.5 px-2 text-center">
+                      <span className="px-2 py-0.5 bg-slate-950 border border-slate-800 rounded-lg font-mono text-slate-300">{cust.count.toLocaleString('bn-BD')}</span>
+                    </td>
+                    <td className="py-2.5 px-2 font-mono text-slate-400">{cust.oldest}</td>
+                    <td className="py-2.5 px-2 text-right font-mono font-black text-amber-300">৳{cust.total.toLocaleString('bn-BD')}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-amber-500/30">
+                  <td colSpan={4} className="py-3 px-2 font-black text-amber-400">সর্বমোট বাকি পাওনা</td>
+                  <td className="py-3 px-2 text-right font-mono font-black text-amber-300 text-sm">৳{duesGrandTotal.toLocaleString('bn-BD')}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* SIMULATED EXPORT MODAL DISPLAY */}

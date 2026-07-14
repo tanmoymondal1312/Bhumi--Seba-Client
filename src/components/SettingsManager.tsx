@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, SystemSettings, QuickReminder } from '../types';
+import { User, SystemSettings, QuickReminder, ExpenseCategoryMeta } from '../types';
 import { api } from '../api/client';
 import {
   Settings, Key, AlertTriangle, ShieldAlert,
@@ -24,6 +24,9 @@ interface SettingsManagerProps {
   onUpdateServiceTypes: (newList: string[]) => void;
   servicesMetadata: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>;
   onUpdateServicesMetadata: (newMetadata: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>) => void;
+  expenseCategories?: Record<string, ExpenseCategoryMeta>;
+  onAddExpenseCategory?: (key: string, meta: ExpenseCategoryMeta) => Promise<void>;
+  onDeleteExpenseCategory?: (key: string) => void;
 }
 
 export default function SettingsManager({
@@ -37,7 +40,10 @@ export default function SettingsManager({
   activeServiceTypes,
   onUpdateServiceTypes,
   servicesMetadata,
-  onUpdateServicesMetadata
+  onUpdateServicesMetadata,
+  expenseCategories = {},
+  onAddExpenseCategory,
+  onDeleteExpenseCategory
 }: SettingsManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
   const isPrimaryOwner = currentUser.role === 'OWNER_ONE';
@@ -118,6 +124,69 @@ export default function SettingsManager({
       onUpdateServiceTypes(updatedList);
       setServiceActionMsg('সার্ভিসটি সফলভাবে তালিকা থেকে অপসারিত হয়েছে।');
       setTimeout(() => setServiceActionMsg(''), 3000);
+    }
+  };
+
+  // Expense category management state
+  const [newCatBangla, setNewCatBangla] = useState<string>('');
+  const [newCatEnglish, setNewCatEnglish] = useState<string>('');
+  const [newCatIsFixed, setNewCatIsFixed] = useState<boolean>(false);
+  const [catActionMsg, setCatActionMsg] = useState<string>('');
+
+  const handleAddExpenseCat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onAddExpenseCategory) return;
+    if (!newCatBangla.trim() || !newCatEnglish.trim()) {
+      alert('খাতের বাংলা নাম ও ইংরেজি আইডি দুটোই দিন দয়া করে।');
+      return;
+    }
+
+    const rawKey = newCatEnglish.replace(/[^a-zA-Z\s_-]/g, '').trim();
+    const catKey = rawKey.toUpperCase().replace(/[\s-]/g, '_');
+    if (!catKey) {
+      alert('ইংরেজিতে একটি সঠিক ইউনিক আইডি দিন দয়া করে।');
+      return;
+    }
+    if (expenseCategories[catKey]) {
+      alert('এই আইডির খরচের খাতটি ইতিমধ্যে তালিকায় রয়েছে!');
+      return;
+    }
+
+    const colors = ['bg-rose-500', 'bg-orange-500', 'bg-lime-500', 'bg-teal-500', 'bg-sky-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-cyan-500'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    try {
+      await onAddExpenseCategory(catKey, {
+        bangla: newCatBangla.trim(),
+        english: rawKey,
+        color,
+        isFixed: newCatIsFixed,
+      });
+      setNewCatBangla('');
+      setNewCatEnglish('');
+      setNewCatIsFixed(false);
+      setCatActionMsg('নতুন খরচের খাতটি সফলভাবে যুক্ত করা হয়েছে!');
+      setTimeout(() => setCatActionMsg(''), 3000);
+    } catch {
+      alert('খাত যোগ করা যায়নি — আবার চেষ্টা করুন।');
+    }
+  };
+
+  const handleDeleteExpenseCat = (key: string) => {
+    if (!onDeleteExpenseCategory) return;
+    const meta = expenseCategories[key];
+    if (meta?.isFixed && ['RENT', 'ELECTRICITY', 'INTERNET', 'SALARY'].includes(key)) {
+      alert('স্থায়ী মূল খাতগুলো (ভাড়া, বিদ্যুৎ, নেট, বেতন) মুছে ফেলা যাবে না — ড্যাশবোর্ডের হিসাব এগুলোর উপর নির্ভরশীল।');
+      return;
+    }
+    if (Object.keys(expenseCategories).length <= 1) {
+      alert('নূন্যতম একটি খরচের খাত সচল থাকা বাধ্যতামূলক।');
+      return;
+    }
+    if (confirm(`আপনি কি নিশ্চিত যে তালিকা থেকে "${meta?.bangla || key}" খরচের খাতটি সরিয়ে দিতে চান?`)) {
+      onDeleteExpenseCategory(key);
+      setCatActionMsg('খরচের খাতটি সফলভাবে তালিকা থেকে অপসারিত হয়েছে।');
+      setTimeout(() => setCatActionMsg(''), 3000);
     }
   };
 
@@ -589,6 +658,126 @@ export default function SettingsManager({
 
         </div>
 
+      </div>
+    )}
+
+    {/* EXPENSE CATEGORY MANAGEMENT SECTION (FOR OWNER ACCESS) */}
+    {isOwner && onAddExpenseCategory && (
+      <div className="mt-8 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl relative overflow-hidden text-left">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-rose-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div className="border-b border-slate-800 pb-4 mb-6">
+          <span className="text-[10px] uppercase font-bold tracking-widest text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-full">
+            খরচের খাত সেটিং প্যানেল (Expense Categories Controller)
+          </span>
+          <h3 className="text-base font-black text-white mt-1.5 flex items-center">
+            <Settings className="w-4.5 h-4.5 text-rose-400 mr-2 shrink-0" />
+            দোকান ব্যয়ের খাত কনফিগারেশন (Add & Delete Expense Categories)
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-1">এখানে নতুন খরচের খাত যুক্ত করলে তা দোকান ব্যয় প্যানেলের তালিকায় সচল হবে।</p>
+        </div>
+
+        {catActionMsg && (
+          <div className="mb-4 bg-emerald-950/45 border border-emerald-800 text-emerald-300 p-3 rounded-2xl flex items-center space-x-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{catActionMsg}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+          {/* Current category listing (7 Cols) */}
+          <div className="lg:col-span-7 bg-slate-950/50 border border-slate-850 rounded-2xl p-4.5">
+            <span className="text-slate-400 text-xs font-semibold block mb-3">সচল খরচের খাতসমূহ ({Object.keys(expenseCategories).length.toLocaleString('bn-BD')} টি)</span>
+            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              {Object.entries(expenseCategories).map(([key, meta]) => (
+                <div key={key} className="flex items-center justify-between p-2.5 bg-slate-900 border border-slate-850 rounded-xl">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.color}`}></span>
+                    <div className="min-w-0">
+                      <span className="text-xs font-bold text-slate-200 block truncate">{meta.bangla}</span>
+                      <span className="text-[9px] text-slate-500 font-mono block truncate">{key}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                      meta.isFixed
+                        ? 'bg-rose-950/40 text-rose-400 border border-rose-900/40'
+                        : 'bg-purple-950/40 text-purple-400 border border-purple-900/40'
+                    }`}>
+                      {meta.isFixed ? 'স্থায়ী' : 'চলতি'}
+                    </span>
+                    <button
+                      type="button"
+                      id={`btn-delete-cat-${key}`}
+                      onClick={() => handleDeleteExpenseCat(key)}
+                      className="text-slate-500 hover:text-red-400 hover:bg-red-500/10 p-1.5 rounded-xl cursor-pointer transition"
+                      title="খাতটি মুছুন"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Add new category form (5 Cols) */}
+          <div className="lg:col-span-5 bg-slate-950/50 border border-slate-850 rounded-2xl p-4.5">
+            <span className="text-slate-400 text-xs font-semibold block mb-4 font-sans">নতুন খরচের খাত যোগ করুন</span>
+
+            <form onSubmit={handleAddExpenseCat} className="space-y-3.5">
+              <div className="space-y-1.5 font-sans">
+                <label className="text-[10px] text-slate-400 font-bold">খাতের নাম (বাংলায়)</label>
+                <input
+                  id="input-new-cat-bangla"
+                  type="text"
+                  value={newCatBangla}
+                  onChange={(e) => setNewCatBangla(e.target.value)}
+                  placeholder="যেমন: দোকান মেরামত খরচ"
+                  className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="space-y-1.5 font-sans">
+                <label className="text-[10px] text-slate-400 font-bold">ইউনিক আইডি (ইংরেজিতে)</label>
+                <input
+                  id="input-new-cat-english"
+                  type="text"
+                  value={newCatEnglish}
+                  onChange={(e) => setNewCatEnglish(e.target.value)}
+                  placeholder="e.g: Shop Repair"
+                  className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white font-mono text-xs focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 bg-slate-900 border border-slate-850 rounded-xl">
+                <div>
+                  <span className="block text-[11px] font-semibold text-slate-200">স্থায়ী খরচ (Fixed)?</span>
+                  <span className="text-[9px] text-slate-500">মাসে একবার এন্ট্রিযোগ্য খরচ হলে চালু করুন</span>
+                </div>
+                <button
+                  type="button"
+                  id="btn-toggle-cat-fixed"
+                  onClick={() => setNewCatIsFixed(!newCatIsFixed)}
+                  className={`w-10 h-5.5 rounded-full p-0.5 transition cursor-pointer ${newCatIsFixed ? 'bg-rose-500' : 'bg-slate-800'}`}
+                >
+                  <div className={`bg-slate-950 w-4 h-4 rounded-full transition-transform ${newCatIsFixed ? 'translate-x-4.5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <button
+                id="btn-add-expense-cat"
+                type="submit"
+                className="w-full py-2.5 bg-rose-500 hover:bg-rose-400 font-bold text-xs rounded-xl text-white cursor-pointer flex items-center justify-center space-x-1"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>খরচের খাত যোগ করুন (Add Category)</span>
+              </button>
+            </form>
+          </div>
+
+        </div>
       </div>
     )}
 

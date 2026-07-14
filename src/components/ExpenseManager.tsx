@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, ExpenseRecord, ExpenseCategory } from '../types';
+import { User, ExpenseRecord, ExpenseCategory, ExpenseCategoryMeta } from '../types';
 import { EXPENSE_METADATA } from '../data/mockData';
 import { api } from '../api/client';
 import { getTodayStr, formatBanglaDate } from '../utils/finance';
@@ -16,6 +16,7 @@ interface ExpenseManagerProps {
   expenseAlertThreshold: number;
   onAddExpense: (record: Omit<ExpenseRecord, 'id'>) => void;
   onDeleteExpense?: (id: string) => void;
+  expenseCategories?: Record<string, ExpenseCategoryMeta>;
 }
 
 export default function ExpenseManager({
@@ -23,9 +24,18 @@ export default function ExpenseManager({
   currentUser,
   expenseAlertThreshold,
   onAddExpense,
-  onDeleteExpense
+  onDeleteExpense,
+  expenseCategories
 }: ExpenseManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
+
+  // Dynamic category map — settings-managed categories with built-in fallback
+  const catMap: Record<string, ExpenseCategoryMeta> =
+    expenseCategories && Object.keys(expenseCategories).length > 0
+      ? expenseCategories
+      : (EXPENSE_METADATA as Record<string, ExpenseCategoryMeta>);
+  const fixedCats = Object.entries(catMap).filter(([, m]) => m.isFixed);
+  const variableCats = Object.entries(catMap).filter(([, m]) => !m.isFixed);
 
   const getDisplayName = (name: string) => {
     if (currentUser.role === 'STAFF') {
@@ -71,11 +81,11 @@ export default function ExpenseManager({
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const timeFormatted = `${hours}:${minutes}`;
 
-    if (['RENT', 'ELECTRICITY', 'INTERNET', 'SALARY'].includes(category)) {
+    if (catMap[category]?.isFixed) {
       const monthPrefix = dateFormatted.substring(0, 7); // '2026-06'
       const hasDuplicate = expenseList.some(item => item.category === category && item.date.startsWith(monthPrefix));
       if (hasDuplicate) {
-        alert(`এই মাসে ইতিমধ্যে একবার "${EXPENSE_METADATA[category].bangla}" বাবদ খরচ এন্ট্রি করা হয়েছে। নিয়ম অনুযায়ী এক মাসে একবারই এই এন্ট্রি দেওয়া যাবে!`);
+        alert(`এই মাসে ইতিমধ্যে একবার "${(catMap[category]?.bangla || category)}" বাবদ খরচ এন্ট্রি করা হয়েছে। নিয়ম অনুযায়ী এক মাসে একবারই এই এন্ট্রি দেওয়া যাবে!`);
         return;
       }
     }
@@ -86,7 +96,7 @@ export default function ExpenseManager({
       category,
       amount: cleanAmount,
       enteredBy: currentUser.name,
-      note: note.trim() || `${EXPENSE_METADATA[category].bangla} বাবদ ব্যয়`
+      note: note.trim() || `${(catMap[category]?.bangla || category)} বাবদ ব্যয়`
     });
 
     setAmount('');
@@ -100,8 +110,8 @@ export default function ExpenseManager({
   // Group list to Fixed vs Variable
   const filteredExpenses = expenseList.filter(item => {
     if (filterCat === 'ALL') return true;
-    if (filterCat === 'FIXED') return EXPENSE_METADATA[item.category].isFixed;
-    if (filterCat === 'VARIABLE') return !EXPENSE_METADATA[item.category].isFixed;
+    if (filterCat === 'FIXED') return catMap[item.category]?.isFixed;
+    if (filterCat === 'VARIABLE') return !catMap[item.category]?.isFixed;
     return item.category === filterCat;
   });
 
@@ -150,16 +160,14 @@ export default function ExpenseManager({
               className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2 px-3 text-slate-200 text-xs focus:outline-none focus:border-indigo-500/85 cursor-pointer font-semibold"
             >
               <optgroup label="Fixed Expenses (স্থায়ী খরচ)">
-                <option value="RENT">ঘর ভাড়া</option>
-                <option value="ELECTRICITY">কারেন্ট বিল</option>
-                <option value="INTERNET">ইন্টারনেট বিল</option>
-                <option value="SALARY">কর্মচারী বেতন</option>
+                {fixedCats.map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.bangla}</option>
+                ))}
               </optgroup>
               <optgroup label="Variable Expenses (চলতি খরচ)">
-                <option value="OFFICE">অফিস খরচ/চা-নাস্তা</option>
-                <option value="TRAVEL">যাতায়াত খরচ</option>
-                <option value="PRINT">প্রিন্ট/ফটোকপি পেপার</option>
-                <option value="OTHERS">अन्यান্য কাস্টম খরচ</option>
+                {variableCats.map(([key, meta]) => (
+                  <option key={key} value={key}>{meta.bangla}</option>
+                ))}
               </optgroup>
             </select>
           </div>
@@ -180,7 +188,7 @@ export default function ExpenseManager({
               />
             </div>
             <p className="text-[9px] text-slate-500 mt-1">
-              * খরচটি {EXPENSE_METADATA[category].isFixed ? 'স্থায়ী খরচ (Fixed)' : 'চলতি খরচ (Variable)'} হিসেবে গণ্য হবে।
+              * খরচটি {catMap[category]?.isFixed ? 'স্থায়ী খরচ (Fixed)' : 'চলতি খরচ (Variable)'} হিসেবে গণ্য হবে।
             </p>
           </div>
 
@@ -280,7 +288,7 @@ export default function ExpenseManager({
                   </tr>
                 ) : (
                   filteredExpenses.map(record => {
-                    const meta = EXPENSE_METADATA[record.category];
+                    const meta = catMap[record.category] || EXPENSE_METADATA[record.category as keyof typeof EXPENSE_METADATA];
                     return (
                       <tr key={record.id} className="text-xs text-slate-300 hover:bg-slate-850/30 transition">
                         {/* Expense title element */}
@@ -329,7 +337,7 @@ export default function ExpenseManager({
                                 setConfirmDialog({
                                   isOpen: true,
                                   title: 'খরচ মুছে ফেলার নিশ্চয়তা',
-                                  message: `আপনি কি নিশ্চিত যে "${record.note || EXPENSE_METADATA[record.category].bangla}" বাবদ এই ৳${record.amount.toLocaleString()} টাকার ম্যাচিং খরচের রেকর্ডটি চিরতরে মুছে ফেলতে চান?`,
+                                  message: `আপনি কি নিশ্চিত যে "${record.note || (catMap[record.category]?.bangla || record.category)}" বাবদ এই ৳${record.amount.toLocaleString()} টাকার ম্যাচিং খরচের রেকর্ডটি চিরতরে মুছে ফেলতে চান?`,
                                   onConfirm: () => {
                                     onDeleteExpense(record.id);
                                     setConfirmDialog(p => ({ ...p, isOpen: false }));

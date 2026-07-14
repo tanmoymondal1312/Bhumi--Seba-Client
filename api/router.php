@@ -83,8 +83,33 @@ if (preg_match('#^/auth/(.+)$#', $path, $m)) {
 } elseif ($path === '/services') {
     require __DIR__ . '/services.php';
 
-// Route: /backup/*
-} elseif (preg_match('#^/backup#', $path)) {
+// Route: /dues/:id/pay
+} elseif (preg_match('#^/dues/([^/]+)/pay$#', $path, $m)) {
+    $_GET['id'] = $m[1];
+    $_GET['action'] = 'pay';
+    require __DIR__ . '/dues.php';
+
+// Route: /dues/:id
+} elseif (preg_match('#^/dues/([^/]+)$#', $path, $m)) {
+    $_GET['id'] = $m[1];
+    require __DIR__ . '/dues.php';
+
+// Route: /dues
+} elseif ($path === '/dues') {
+    require __DIR__ . '/dues.php';
+
+// Route: /categories/:key
+} elseif (preg_match('#^/categories/([^/]+)$#', $path, $m)) {
+    $_GET['key'] = $m[1];
+    require __DIR__ . '/categories.php';
+
+// Route: /categories
+} elseif ($path === '/categories') {
+    require __DIR__ . '/categories.php';
+
+// Route: /backup/:action (export|reset)
+} elseif (preg_match('#^/backup/([^/]+)$#', $path, $m)) {
+    $_GET['action'] = $m[1];
     require __DIR__ . '/backup.php';
 
 // Route: /users/:id

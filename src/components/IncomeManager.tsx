@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, IncomeRecord, ServiceType } from '../types';
+import { User, IncomeRecord, ServiceType, DueRecord } from '../types';
 import { SERVICE_METADATA } from '../data/mockData';
 import { getDailyIncomeMetrics, getTodayStr, formatBanglaDate } from '../utils/finance';
-import { Calendar, Clock, DollarSign, FileText, Search, CreditCard, CheckCircle, Trash2, PlusCircle, Edit } from 'lucide-react';
+import { Calendar, Clock, DollarSign, FileText, Search, CreditCard, CheckCircle, Trash2, PlusCircle, Edit, BookOpen, HandCoins, UserRound, Check } from 'lucide-react';
 
 interface IncomeManagerProps {
   incomeList: IncomeRecord[];
@@ -18,6 +18,10 @@ interface IncomeManagerProps {
   activeServiceTypes: ServiceType[];
   onUpdateServiceTypes: (types: ServiceType[]) => void;
   servicesMetadata: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>;
+  duesList?: DueRecord[];
+  onAddDue?: (record: Omit<DueRecord, 'id'>) => void;
+  onPayDue?: (id: string, paymentMethod?: 'CASH' | 'BKASH') => void;
+  onDeleteDue?: (id: string) => void;
 }
 
 export default function IncomeManager({
@@ -28,7 +32,11 @@ export default function IncomeManager({
   onUpdateIncome,
   activeServiceTypes,
   onUpdateServiceTypes,
-  servicesMetadata
+  servicesMetadata,
+  duesList = [],
+  onAddDue,
+  onPayDue,
+  onDeleteDue
 }: IncomeManagerProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
 
@@ -42,6 +50,16 @@ export default function IncomeManager({
   // 1. Form state definitions
   const [serviceType, setServiceType] = useState<ServiceType>(activeServiceTypes[0] || 'NAMJARI');
   const [amount, setAmount] = useState<string>('300'); // default for NAMJARI
+  const [entryDate, setEntryDate] = useState<string>(getTodayStr()); // যেকোনো তারিখের এন্ট্রি
+
+  // বাকির খাতা (Dues Ledger) form states
+  const [dueCustomer, setDueCustomer] = useState<string>('');
+  const [duePhone, setDuePhone] = useState<string>('');
+  const [dueAmount, setDueAmount] = useState<string>('');
+  const [dueNote, setDueNote] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>(getTodayStr());
+  const [dueServiceType, setDueServiceType] = useState<ServiceType>('OTHERS');
+  const [dueToPay, setDueToPay] = useState<DueRecord | null>(null);
   const [note, setNote] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BKASH'>('CASH');
   const [successAnimation, setSuccessAnimation] = useState<boolean>(false);
@@ -181,8 +199,13 @@ export default function IncomeManager({
       return;
     }
 
+    if (entryDate && entryDate > todayStr) {
+      alert('ভবিষ্যতের তারিখে ইনকাম এন্ট্রি করা যাবে না!');
+      return;
+    }
+
     const now = new Date();
-    const dateFormatted = getTodayStr();
+    const dateFormatted = entryDate || getTodayStr();
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const timeFormatted = `${hours}:${minutes}`;
@@ -447,6 +470,38 @@ export default function IncomeManager({
               </div>
             </div>
 
+            {/* Entry Date Selector — যেকোনো তারিখের ইনকাম এন্ট্রি */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-slate-400 text-xs font-semibold">এন্ট্রির তারিখ (Entry Date)</label>
+                {entryDate !== todayStr && (
+                  <button
+                    type="button"
+                    id="btn-reset-entry-date"
+                    onClick={() => setEntryDate(todayStr)}
+                    className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold underline cursor-pointer"
+                  >
+                    আজকের তারিখে ফিরুন
+                  </button>
+                )}
+              </div>
+              <input
+                id="input-income-date"
+                type="date"
+                required
+                value={entryDate}
+                max={todayStr}
+                onChange={(e) => setEntryDate(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-850 rounded-xl py-2 px-3 text-white font-mono text-xs focus:outline-none focus:border-emerald-500/80 cursor-pointer"
+              />
+              {entryDate !== todayStr && (
+                <p className="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  পুরনো তারিখের এন্ট্রি: {formatBanglaDate(entryDate)} তারিখে এই ইনকাম যুক্ত হবে
+                </p>
+              )}
+            </div>
+
             {/* Payment Method Selector */}
             <div>
               <label className="block text-slate-400 text-xs font-semibold mb-1.5">পেমেন্ট মাধ্যম (Payment Method)</label>
@@ -675,8 +730,259 @@ export default function IncomeManager({
 
       </div>
 
-    </div>
-  </div>
+      </div>
+
+      {/* ═══════════ বাকির খাতা (DUES LEDGER) ═══════════ */}
+      {onAddDue && (
+        <div id="dues-ledger-section" className="bg-slate-900 border border-amber-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-72 h-72 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+          <div className="border-b border-slate-800 pb-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-full">
+                বাকির খাতা (Customer Dues Ledger)
+              </span>
+              <h3 className="text-base font-black text-white mt-1.5 flex items-center">
+                <BookOpen className="w-4.5 h-4.5 text-amber-400 mr-2 shrink-0" />
+                কোন গ্রাহকের কাছে কত টাকা বাকি — এন্ট্রি ও আদায়
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-1">গ্রাহক টাকা পরিশোধ করলে "পরিশোধ" বাটনে ক্লিক করুন — বাকিটি মুছে গিয়ে আজকের তারিখে অটোমেটিক ইনকামে যুক্ত হবে।</p>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl px-5 py-3 text-center shrink-0">
+              <span className="text-[10px] text-amber-400 font-bold uppercase block">মোট বাকি</span>
+              <span className="text-xl font-black font-mono text-amber-300">৳{duesList.reduce((s, d) => s + d.amount, 0).toLocaleString('bn-BD')}</span>
+              <span className="text-[9px] text-slate-500 block">{duesList.length} টি এন্ট্রি</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+            {/* Due Add Form */}
+            <div className="lg:col-span-2 bg-slate-950/50 border border-slate-850 rounded-2xl p-4.5 h-fit">
+              <span className="text-slate-400 text-xs font-semibold block mb-3.5">নতুন বাকি এন্ট্রি করুন</span>
+              <form
+                className="space-y-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const amt = parseFloat(dueAmount);
+                  if (!dueCustomer.trim() || isNaN(amt) || amt <= 0) {
+                    alert('গ্রাহকের নাম ও সঠিক টাকার পরিমাণ দিন।');
+                    return;
+                  }
+                  onAddDue({
+                    customerName: dueCustomer.trim(),
+                    phone: duePhone.trim(),
+                    serviceType: dueServiceType,
+                    amount: amt,
+                    note: dueNote.trim(),
+                    date: dueDate || todayStr,
+                    enteredBy: currentUser.name,
+                  });
+                  setDueCustomer(''); setDuePhone(''); setDueAmount(''); setDueNote(''); setDueDate(todayStr);
+                }}
+              >
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">গ্রাহকের নাম *</label>
+                    <input
+                      id="input-due-customer"
+                      type="text"
+                      required
+                      value={dueCustomer}
+                      onChange={(e) => setDueCustomer(e.target.value)}
+                      placeholder="যেমন: রহিম মিয়া"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-white text-xs focus:outline-none focus:border-amber-500/60"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">মোবাইল (ঐচ্ছিক)</label>
+                    <input
+                      id="input-due-phone"
+                      type="text"
+                      value={duePhone}
+                      onChange={(e) => setDuePhone(e.target.value)}
+                      placeholder="01XXX-XXXXXX"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-white text-xs font-mono focus:outline-none focus:border-amber-500/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">বাকির পরিমাণ (৳) *</label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-2 text-[11px] text-slate-500 font-bold">৳</span>
+                      <input
+                        id="input-due-amount"
+                        type="number"
+                        required
+                        value={dueAmount}
+                        onChange={(e) => setDueAmount(e.target.value)}
+                        placeholder="500"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 pl-7 text-white font-mono font-bold text-xs focus:outline-none focus:border-amber-500/60"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 font-bold block mb-1">তারিখ</label>
+                    <input
+                      id="input-due-date"
+                      type="date"
+                      value={dueDate}
+                      max={todayStr}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-white font-mono text-xs focus:outline-none focus:border-amber-500/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">কোন সার্ভিস বাবদ</label>
+                  <select
+                    id="input-due-service"
+                    value={dueServiceType}
+                    onChange={(e) => setDueServiceType(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-slate-200 text-xs focus:outline-none focus:border-amber-500/60 cursor-pointer"
+                  >
+                    {[...activeServiceTypes, ...(activeServiceTypes.includes('OTHERS') ? [] : ['OTHERS'])].map(s => (
+                      <option key={s} value={s}>{servicesMetadata[s]?.bangla || SERVICE_METADATA[s]?.bangla || s}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold block mb-1">নোট (ঐচ্ছিক)</label>
+                  <input
+                    id="input-due-note"
+                    type="text"
+                    value={dueNote}
+                    onChange={(e) => setDueNote(e.target.value)}
+                    placeholder="যেমন: নামজারি কেস নং ৪৫২"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 px-3 text-white text-xs focus:outline-none focus:border-amber-500/60"
+                  />
+                </div>
+
+                <button
+                  id="btn-add-due"
+                  type="submit"
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition flex items-center justify-center gap-1.5"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  <span>বাকির খাতায় যুক্ত করুন</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Dues List */}
+            <div className="lg:col-span-3 bg-slate-950/50 border border-slate-850 rounded-2xl p-4.5">
+              <span className="text-slate-400 text-xs font-semibold block mb-3.5">চলমান বাকির তালিকা ({duesList.length.toLocaleString('bn-BD')} জন)</span>
+              {duesList.length === 0 ? (
+                <div className="text-center py-10">
+                  <HandCoins className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500 italic">কোনো বাকি নেই — সব হিসাব পরিষ্কার! 🎉</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                  {duesList.map(due => (
+                    <div key={due.id} id={`due-item-${due.id}`} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-3 bg-slate-900 border border-slate-850 rounded-2xl hover:border-amber-500/30 transition">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shrink-0">
+                          <UserRound className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold text-slate-200 block truncate">{due.customerName}</span>
+                          <span className="text-[9.5px] text-slate-500 block truncate">
+                            {servicesMetadata[due.serviceType]?.bangla || due.serviceType}
+                            {due.note ? ` • ${due.note}` : ''}
+                            {due.phone ? ` • ${due.phone}` : ''}
+                          </span>
+                          <span className="text-[9px] text-slate-600 font-mono">{due.date}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 justify-end">
+                        <span className="font-mono font-black text-amber-300 text-sm">৳{due.amount.toLocaleString('bn-BD')}</span>
+                        <button
+                          id={`btn-pay-due-${due.id}`}
+                          onClick={() => setDueToPay(due)}
+                          title="টাকা পরিশোধ হয়েছে — ইনকামে যুক্ত করুন"
+                          className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl text-[10px] font-bold cursor-pointer transition"
+                        >
+                          <Check className="w-3 h-3" />
+                          <span>পরিশোধ</span>
+                        </button>
+                        {onDeleteDue && (
+                          <button
+                            id={`btn-delete-due-${due.id}`}
+                            onClick={() => {
+                              if (confirm(`"${due.customerName}" এর ৳${due.amount} বাকির এন্ট্রিটি মুছে ফেলবেন? (ভুল এন্ট্রির ক্ষেত্রে — ইনকামে যুক্ত হবে না)`)) {
+                                onDeleteDue(due.id);
+                              }
+                            }}
+                            title="ভুল এন্ট্রি মুছুন (ইনকামে যুক্ত হবে না)"
+                            className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-slate-950 rounded-lg cursor-pointer transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      </div>
+
+    {/* DUE PAY CONFIRMATION MODAL — পরিশোধ নিশ্চিতকরণ */}
+    {dueToPay && onPayDue && (
+      <div id="due-pay-confirm-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm"
+          onClick={() => setDueToPay(null)}
+        ></div>
+
+        <div className="relative bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full mx-auto shadow-2xl animate-in zoom-in duration-200">
+          <div className="text-center font-sans">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 mb-4">
+              <HandCoins className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-base font-bold text-white mb-2">বাকি পরিশোধ নিশ্চিত করুন</h3>
+
+            <p className="text-slate-400 text-xs leading-relaxed mb-4 px-1">
+              <strong className="text-white">{dueToPay.customerName}</strong> এর <strong className="text-amber-300 font-mono">৳{dueToPay.amount.toLocaleString('bn-BD')}</strong> টাকা কি পরিশোধ হয়েছে?
+              নিশ্চিত করলে বাকিটি তালিকা থেকে মুছে গিয়ে <strong className="text-emerald-400">আজকের তারিখে ইনকামে যুক্ত হবে</strong>।
+            </p>
+
+            <div className="flex gap-3 justify-center">
+              <button
+                type="button"
+                onClick={() => setDueToPay(null)}
+                className="flex-1 py-2 px-4 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+              >
+                বাতিল
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-pay-due"
+                onClick={() => {
+                  onPayDue(dueToPay.id, 'CASH');
+                  setDueToPay(null);
+                }}
+                className="flex-1 py-2 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
+              >
+                <Check className="w-3.5 h-3.5" />
+                হ্যাঁ, পরিশোধ হয়েছে
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Custom Confirmation Modal Overlay for Record Delete */}
     {recordToDelete && (

@@ -58,6 +58,15 @@ RewriteRule ^api/services/([^/]+)/toggle$ api/services.php?key=$1&action=toggle 
 RewriteRule ^api/services/([^/]+)$ api/services.php?key=$1 [L,QSA]
 RewriteRule ^api/services$ api/services.php [L,QSA]
 
+# /api/dues/:id/pay  (must be before /:id rule)
+RewriteRule ^api/dues/([^/]+)/pay$ api/dues.php?id=$1&action=pay [L,QSA]
+RewriteRule ^api/dues/([^/]+)$ api/dues.php?id=$1 [L,QSA]
+RewriteRule ^api/dues$ api/dues.php [L,QSA]
+
+# /api/categories/:key
+RewriteRule ^api/categories/([^/]+)$ api/categories.php?key=$1 [L,QSA]
+RewriteRule ^api/categories$ api/categories.php [L,QSA]
+
 # /api/backup/export|reset
 RewriteRule ^api/backup/([^/]+)$ api/backup.php?action=$1 [L,QSA]
 

@@ -17,6 +17,8 @@ if ($m === 'GET' && $action === 'export') {
     $settings = $db->query('SELECT * FROM settings WHERE id = 1')->fetch();
     $services = $db->query('SELECT * FROM services_metadata ORDER BY sort_order')->fetchAll();
     $memos = $db->query('SELECT * FROM memos ORDER BY date DESC, time DESC')->fetchAll();
+    $dues = $db->query('SELECT * FROM dues ORDER BY date DESC')->fetchAll();
+    $categories = $db->query('SELECT * FROM expense_categories ORDER BY sort_order')->fetchAll();
 
     jsonOut([
         'exportDate'      => date('c'),
@@ -69,6 +71,17 @@ if ($m === 'GET' && $action === 'export') {
             'enteredBy' => $r['entered_by'],
             'date' => $r['date'], 'time' => $r['time'],
         ], $memos),
+        'duesList'        => array_map(fn($r) => [
+            'id' => $r['id'], 'customerName' => $r['customer_name'],
+            'phone' => $r['phone'] ?? '', 'serviceType' => $r['service_type'] ?? 'OTHERS',
+            'amount' => (float) $r['amount'], 'note' => $r['note'] ?? '',
+            'date' => $r['date'], 'enteredBy' => $r['entered_by'],
+        ], $dues),
+        'expenseCategories' => array_map(fn($r) => [
+            'categoryKey' => $r['category_key'], 'bangla' => $r['bangla'],
+            'english' => $r['english'] ?? '', 'color' => $r['color'] ?? '',
+            'isFixed' => (bool) $r['is_fixed'], 'isActive' => (bool) $r['is_active'],
+        ], $categories),
     ]);
 }
 
@@ -85,6 +98,8 @@ if ($m === 'POST' && $action === 'reset') {
     $db->exec('DELETE FROM bkash_records');
     $db->exec('DELETE FROM reminders');
     $db->exec('DELETE FROM memos');
+    $db->exec('DELETE FROM dues');
+    $db->exec('DELETE FROM expense_categories');
     $db->exec('DELETE FROM settings');
     $db->exec('DELETE FROM services_metadata');
     $db->exec('DELETE FROM users');

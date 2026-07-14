@@ -27,15 +27,16 @@ export interface IncomeRecord {
   paymentMethod: 'CASH' | 'BKASH';
 }
 
-export type ExpenseCategory =
-  | 'RENT' // ঘর ভাড়া
-  | 'ELECTRICITY' // কারেন্ট বিল
-  | 'INTERNET' // ইন্টারনেট বিল
-  | 'SALARY' // কর্মচারী বেতন
-  | 'OFFICE' // অফিস খরচ
-  | 'TRAVEL' // যাতায়াত
-  | 'PRINT' // প্রিন্ট/ফটোকপি
-  | 'OTHERS'; // অন্যান্য খরচ
+// Dynamic — default keys: RENT, ELECTRICITY, INTERNET, SALARY, OFFICE, TRAVEL, PRINT, OTHERS
+// plus any custom category keys added from Settings
+export type ExpenseCategory = string;
+
+export interface ExpenseCategoryMeta {
+  bangla: string;
+  english: string;
+  color: string;
+  isFixed: boolean;
+}
 
 export type ExpenseType = 'FIXED' | 'VARIABLE';
 
@@ -66,6 +67,17 @@ export interface QuickReminder {
   title: string;
   date: string;
   isCompleted: boolean;
+}
+
+export interface DueRecord {
+  id: string;
+  customerName: string;
+  phone?: string;
+  serviceType: ServiceType;
+  amount: number;
+  note: string;
+  date: string; // YYYY-MM-DD — যেদিন বাকি নেওয়া হয়েছে
+  enteredBy: string;
 }
 
 export interface SystemSettings {

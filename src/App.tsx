@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, SystemSettings, ServiceType } from './types';
+import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, SystemSettings, ServiceType, DueRecord, ExpenseCategoryMeta } from './types';
 import { getTodayStr, formatBanglaDate } from './utils/finance';
 import { api } from './api/client';
 
@@ -32,6 +32,17 @@ export default function App() {
   const [expenseList, setExpenseList] = useState<ExpenseRecord[]>([]);
   const [bkashList, setBkashList] = useState<BKashRecord[]>([]);
   const [reminders, setReminders] = useState<QuickReminder[]>([]);
+  const [duesList, setDuesList] = useState<DueRecord[]>([]);
+  const [expenseCategories, setExpenseCategories] = useState<Record<string, ExpenseCategoryMeta>>({
+    RENT: { bangla: 'ঘর ভাড়া', english: 'Shop Rent', color: 'bg-red-500', isFixed: true },
+    ELECTRICITY: { bangla: 'কারেন্ট বিল', english: 'Electricity Bill', color: 'bg-yellow-500', isFixed: true },
+    INTERNET: { bangla: 'ইন্টারনেট বিল', english: 'WiFi & Internet', color: 'bg-indigo-500', isFixed: true },
+    SALARY: { bangla: 'কর্মচারী বেতন', english: 'Staff Salaries', color: 'bg-blue-600', isFixed: true },
+    OFFICE: { bangla: 'অফিস খরচ/চা-নাস্তা', english: 'Office Tea & Snacks', color: 'bg-amber-500', isFixed: false },
+    TRAVEL: { bangla: 'যাতায়াত খরচ', english: 'Travel & Courier', color: 'bg-purple-500', isFixed: false },
+    PRINT: { bangla: 'প্রিন্ট/ফটোকপি পেপার', english: 'Paper & Stationery', color: 'bg-emerald-500', isFixed: false },
+    OTHERS: { bangla: 'অন্যান্য খরচ', english: 'Miscellaneous', color: 'bg-slate-500', isFixed: false }
+  });
   const [settings, setSettings] = useState<SystemSettings>({
     isDarkMode: true,
     pinLockEnabled: true,
@@ -91,19 +102,38 @@ export default function App() {
   // 2. LOAD ALL DATA FROM API AFTER LOGIN
   async function loadAllData() {
     try {
-      const [incomeData, expenseData, bkashData, reminderData, settingsData, servicesData] = await Promise.all([
+      const [incomeData, expenseData, bkashData, reminderData, settingsData, servicesData, duesData, categoriesData] = await Promise.all([
         api.income.getAll(),
         api.expenses.getAll(),
         api.bkash.getAll(),
         api.reminders.getAll(),
         api.settings.get(),
         api.services.getAll(),
+        api.dues.getAll(),
+        api.categories.getAll(),
       ]);
 
       setIncomeList(incomeData.map((r: any) => ({ ...r, amount: Number(r.amount) })));
       setExpenseList(expenseData.map((r: any) => ({ ...r, amount: Number(r.amount) })));
       setBkashList(bkashData.map((r: any) => ({ ...r, amount: Number(r.amount), fee: r.fee != null ? Number(r.fee) : undefined })));
       setReminders(reminderData.map((r: any) => ({ ...r, isCompleted: !!r.isCompleted })));
+      setDuesList(duesData.map((r: any) => ({ ...r, amount: Number(r.amount) })));
+
+      // Build expense categories map from DB
+      const catObj: Record<string, ExpenseCategoryMeta> = {};
+      for (const cat of categoriesData) {
+        if (cat.isActive) {
+          catObj[cat.categoryKey] = {
+            bangla: cat.bangla,
+            english: cat.english,
+            color: cat.color,
+            isFixed: !!cat.isFixed,
+          };
+        }
+      }
+      if (Object.keys(catObj).length > 0) {
+        setExpenseCategories(catObj);
+      }
 
       const mergedSettings = {
         monthlyRent: 6000,
@@ -269,6 +299,75 @@ export default function App() {
       setExpenseList(prev => prev.filter(item => item.id !== id));
     } catch (err) {
       console.error('Delete expense error:', err);
+    }
+  };
+
+  // ADD NEW DUE (বাকি) ENTRY
+  const handleAddDue = async (record: Omit<DueRecord, 'id'>) => {
+    try {
+      const newDue = await api.dues.create(record);
+      setDuesList(prev => [{ ...newDue, amount: Number(newDue.amount) }, ...prev]);
+    } catch (err) {
+      console.error('Add due error:', err);
+    }
+  };
+
+  // DUE PAID → delete due + auto income entry on the payment date
+  const handlePayDue = async (id: string, paymentMethod: 'CASH' | 'BKASH' = 'CASH') => {
+    try {
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const result = await api.dues.pay(id, {
+        date: getTodayStr(),
+        time,
+        enteredBy: currentUser?.name || '',
+        paymentMethod,
+      });
+      setDuesList(prev => prev.filter(item => item.id !== id));
+      const newRecord: IncomeRecord = { ...result.income, amount: Number(result.income.amount) };
+      setIncomeList(prev => [newRecord, ...prev]);
+    } catch (err) {
+      console.error('Pay due error:', err);
+    }
+  };
+
+  // DELETE DUE (ভুল এন্ট্রি — no income)
+  const handleDeleteDue = async (id: string) => {
+    try {
+      await api.dues.delete(id);
+      setDuesList(prev => prev.filter(item => item.id !== id));
+    } catch (err) {
+      console.error('Delete due error:', err);
+    }
+  };
+
+  // EXPENSE CATEGORY MANAGEMENT (Settings)
+  const handleAddExpenseCategory = async (key: string, meta: ExpenseCategoryMeta) => {
+    try {
+      await api.categories.create({
+        categoryKey: key,
+        bangla: meta.bangla,
+        english: meta.english,
+        color: meta.color,
+        isFixed: meta.isFixed,
+      });
+      setExpenseCategories(prev => ({ ...prev, [key]: meta }));
+    } catch (err) {
+      console.error('Add expense category error:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteExpenseCategory = async (key: string) => {
+    try {
+      await api.categories.delete(key);
+      setExpenseCategories(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    } catch (err) {
+      console.error('Delete expense category error:', err);
     }
   };
 
@@ -570,6 +669,8 @@ export default function App() {
               currentUser={currentUser}
               onNavigate={setActiveTab}
               onToggleReminder={handleToggleReminder}
+              onAddReminder={handleAddReminder}
+              onDeleteReminder={handleDeleteReminder}
               onAddIncome={handleAddIncome}
               activeServiceTypes={activeServiceTypes}
               settings={settings}
@@ -588,6 +689,10 @@ export default function App() {
               activeServiceTypes={activeServiceTypes}
               onUpdateServiceTypes={handleUpdateServiceTypes}
               servicesMetadata={servicesMetadata}
+              duesList={duesList}
+              onAddDue={handleAddDue}
+              onPayDue={handlePayDue}
+              onDeleteDue={handleDeleteDue}
             />
           )}
 
@@ -598,6 +703,7 @@ export default function App() {
               expenseAlertThreshold={settings.expenseAlertThreshold}
               onAddExpense={handleAddExpense}
               onDeleteExpense={handleDeleteExpense}
+              expenseCategories={expenseCategories}
             />
           )}
 
@@ -620,6 +726,7 @@ export default function App() {
               bkashList={bkashList}
               currentUser={currentUser}
               servicesMetadata={servicesMetadata}
+              duesList={duesList}
             />
           )}
 
@@ -636,6 +743,9 @@ export default function App() {
               onUpdateServiceTypes={handleUpdateServiceTypes}
               servicesMetadata={servicesMetadata}
               onUpdateServicesMetadata={updateServicesMetadata}
+              expenseCategories={expenseCategories}
+              onAddExpenseCategory={handleAddExpenseCategory}
+              onDeleteExpenseCategory={handleDeleteExpenseCategory}
             />
           )}
         </main>
