@@ -4,9 +4,10 @@
  */
 
 import React, { useMemo } from 'react';
-import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, ServiceType, SystemSettings } from '../types';
+import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, ServiceType, SystemSettings, ExpenseCategoryMeta, SalarySnapshot } from '../types';
 import { SERVICE_METADATA, EXPENSE_METADATA } from '../data/mockData';
-import { getDailyIncomeMetrics, getIncomeSum, getTodayStr, getYesterdayStr } from '../utils/finance';
+import { getDailyIncomeMetrics, getIncomeSum, getTodayStr, getYesterdayStr, getCurrentAccountingPeriod, getAccountingPeriodRange } from '../utils/finance';
+import { computePeriodSummary } from '../utils/financialModel';
 import { 
   TrendingUp, TrendingDown, ArrowUpRight, DollarSign, 
   Wallet, Layers, ArrowDownRight, Clock, CalendarDays, 
@@ -24,11 +25,14 @@ interface DashboardProps {
   onToggleReminder: (id: string) => void;
   onAddReminder?: (title: string, date: string) => void;
   onDeleteReminder?: (id: string) => void;
-  onAddIncome?: (record: Omit<IncomeRecord, 'id'>) => void;
+  onAddIncome?: (record: Omit<IncomeRecord, 'id'>) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string } | void;
+  onUpdateIncome?: (id: string, updatedFields: Partial<IncomeRecord>) => Promise<{ success: boolean; message?: string }> | { success: boolean; message?: string } | void;
   activeServiceTypes?: ServiceType[];
   settings: SystemSettings;
   servicesMetadata?: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>;
   onUpdateSettings?: (newSettings: Partial<SystemSettings>) => void;
+  expenseCategories?: Record<string, ExpenseCategoryMeta>;
+  salaryData?: SalarySnapshot | null;
 }
 
 export default function Dashboard({
@@ -42,12 +46,26 @@ export default function Dashboard({
   onAddReminder,
   onDeleteReminder,
   onAddIncome,
+  onUpdateIncome,
   activeServiceTypes = ['NAMJARI', 'KHOTIYAN', 'PORCHA', 'DOLIL', 'LAND_APP', 'OTHERS'],
   settings,
   servicesMetadata,
-  onUpdateSettings
+  onUpdateSettings,
+  expenseCategories,
+  salaryData = null
 }: DashboardProps) {
   const isOwner = currentUser.role === 'OWNER_ONE' || currentUser.role === 'OWNER_TWO';
+
+  const catMap = expenseCategories && Object.keys(expenseCategories).length > 0
+    ? expenseCategories
+    : (EXPENSE_METADATA as Record<string, ExpenseCategoryMeta>);
+
+  // Fixed vs variable expense classification — same source as the report and
+  // the shared financial model (DB expense_categories, fallback EXPENSE_METADATA).
+  const catIsFixed = (cat: string): boolean => {
+    const meta = (expenseCategories && expenseCategories[cat]) || (EXPENSE_METADATA as Record<string, { isFixed: boolean }>)[cat];
+    return !!(meta && meta.isFixed);
+  };
 
   // English to Bangla digits conversion helper
   const toBanglaDigits = (num: number | string): string => {
@@ -83,6 +101,7 @@ export default function Dashboard({
 
   const [dashboardQuickAmount, setDashboardQuickAmount] = React.useState<string>('');
   const [dashboardPaymentMethod, setDashboardPaymentMethod] = React.useState<'CASH' | 'BKASH'>('CASH');
+  const [dashboardQuickSubmitting, setDashboardQuickSubmitting] = React.useState<boolean>(false);
 
   const [isEditingCash, setIsEditingCash] = React.useState<boolean>(false);
   const [showIncomeBreakdown, setShowIncomeBreakdown] = React.useState<boolean>(false);
@@ -110,9 +129,10 @@ export default function Dashboard({
     setIsEditingCash(false);
   };
 
-  const handleQuickIncomeSubmit = (e: React.FormEvent) => {
+const handleQuickIncomeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!onAddIncome) return;
+    if (dashboardQuickSubmitting) return;
     const cleanAmount = parseFloat(dashboardQuickAmount);
     if (isNaN(cleanAmount) || cleanAmount <= 0) {
       alert('অনুগ্রহ করে সঠিক টাকার অংক দিন।');
@@ -125,28 +145,63 @@ export default function Dashboard({
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const timeFormatted = `${hours}:${minutes}`;
 
-    onAddIncome({
-      date: dateFormatted,
-      time: timeFormatted,
-      serviceType: 'OTHERS',
-      amount: cleanAmount,
-      enteredBy: currentUser.name,
-      note: 'আজকের ইনকাম (একসাথে এন্ট্রি)',
-      paymentMethod: dashboardPaymentMethod
-    });
-
-    setDashboardQuickAmount('');
-    alert('সফলভাবে আজকের মোট ইনকাম ৳' + cleanAmount + ' এন্ট্রি সংরক্ষণ করা হয়েছে!');
+    setDashboardQuickSubmitting(true);
+    try {
+      let result;
+      if (existingQuickIncome && onUpdateIncome) {
+        result = await onUpdateIncome(existingQuickIncome.id, {
+          amount: cleanAmount,
+          paymentMethod: dashboardPaymentMethod,
+          note: 'আজকের ইনকাম (একসাথে এন্ট্রি)'
+        });
+      } else {
+        result = await onAddIncome({
+          date: dateFormatted,
+          time: timeFormatted,
+          serviceType: 'OTHERS',
+          amount: cleanAmount,
+          enteredBy: currentUser.name,
+          note: 'আজকের ইনকাম (একসাথে এন্ট্রি)',
+          paymentMethod: dashboardPaymentMethod
+        });
+      }
+      if (result && typeof result === 'object' && 'success' in result && !result.success) {
+        alert(result.message || 'সংরক্ষণ ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+        return;
+      }
+      setDashboardQuickAmount('');
+      alert('সফলভাবে আজকের মোট ইনকাম ৳' + cleanAmount + ' এন্ট্রি সংরক্ষণ করা হয়েছে!');
+    } catch (err) {
+      alert('সংরক্ষণ ব্যর্থ হয়েছে। আবার চেষ্টা করুন।');
+    } finally {
+      setDashboardQuickSubmitting(false);
+    }
   };
 
   // Current Date definitions dynamically
   const todayStr = getTodayStr();
   const yesterdayStr = getYesterdayStr();
-  const currentMonthPrefix = todayStr.substring(0, 7);
+  // Accounting period: previous period stays active through the 2nd of the next
+  // calendar month; the new period starts on the 3rd. (e.g. 2026-07 = Jul 3 .. Aug 2)
+  const currentMonthPrefix = getCurrentAccountingPeriod();
+
+  // Find if today's rapid entry (একসাথে এন্ট্রি) already exists so re-submitting
+  // the quick box updates it instead of creating a duplicate record
+  const existingQuickIncome = React.useMemo(() => {
+    return incomeList.find(i => i.date === todayStr && i.note && i.note.includes('একসাথে এন্ট্রি'));
+  }, [incomeList, todayStr]);
+
+  // Pre-populate quick box fields when a record already exists for inline edit
+  React.useEffect(() => {
+    if (existingQuickIncome) {
+      setDashboardQuickAmount(existingQuickIncome.amount.toString());
+      setDashboardPaymentMethod(existingQuickIncome.paymentMethod);
+    }
+  }, [existingQuickIncome]);
 
   // Generate Bangla month label
   const currentMonthBgLabel = useMemo(() => {
-    const [year, month] = todayStr.split('-');
+    const [year, month] = currentMonthPrefix.split('-');
     const monthNamesBg: Record<string, string> = {
       '01': 'জানুয়ারি', '02': 'ফেব্রুয়ারি', '03': 'মার্চ',
       '04': 'এপ্রিল', '05': 'মে', '06': 'জুন',
@@ -161,10 +216,36 @@ export default function Dashboard({
       return numStr.split('').map(char => digits[char] || char).join('');
     };
     return `${monthNamesBg[month] || month} ${englishToBanglaDigits(year)}`;
-  }, [todayStr]);
+  }, [currentMonthPrefix]);
 
   // 1. CALCULATE CORE METRICS WITH MEMO
   const metrics = useMemo(() => {
+    // ONE financial calculation model (Phase 5) — identical totals to the
+    // smart report for the same accounting period. maxDate=today keeps the
+    // "up to today" semantics; a second slice up to yesterday feeds the
+    // month-to-yesterday card.
+    const periodTodaySummary = computePeriodSummary({
+      incomes: incomeList,
+      expenses: expenseList,
+      period: currentMonthPrefix,
+      settings,
+      salarySnapshot: salaryData,
+      catIsFixed,
+      maxDate: todayStr,
+    });
+    const periodYesterdaySummary = computePeriodSummary({
+      incomes: incomeList,
+      expenses: expenseList,
+      period: currentMonthPrefix,
+      settings,
+      salarySnapshot: salaryData,
+      catIsFixed,
+      maxDate: yesterdayStr,
+    });
+
+    const salaryActive = periodTodaySummary.salaryActive;
+    const excludeSalary = (e: { category: string }) => !salaryActive || e.category !== 'SALARY';
+
     // Today's total income using helper
     const todayIncome = getDailyIncomeMetrics(todayStr, incomeList).total;
 
@@ -173,21 +254,19 @@ export default function Dashboard({
 
     // Today's expenses
     const todayExpense = expenseList
-      .filter(e => e.date === todayStr)
+      .filter(e => e.date === todayStr && excludeSalary(e))
       .reduce((sum, item) => sum + item.amount, 0);
 
     // Yesterday's expenses
     const yesterdayExpense = expenseList
-      .filter(e => e.date === yesterdayStr)
+      .filter(e => e.date === yesterdayStr && excludeSalary(e))
       .reduce((sum, item) => sum + item.amount, 0);
 
-    // Month's total income using helper
-    const monthIncome = getIncomeSum(incomeList.filter(i => i.date.startsWith(currentMonthPrefix))).total;
+    // Month's total income (accounting period, quick-box locked, all methods)
+    const monthIncome = periodTodaySummary.totalRevenue;
 
-    // Month's total expenses (Fixed + Variable)
-    const monthExpense = expenseList
-      .filter(e => e.date.startsWith(currentMonthPrefix))
-      .reduce((sum, item) => sum + item.amount, 0);
+    // Month's total expenses (Fixed + Variable, accounting period)
+    const monthExpense = periodTodaySummary.totalExpense;
 
     // bKash Current balance: starting base from settings + INs - OUTs - PAYMENTS
     const bkashBase = settings?.bkashBaseBalance ?? 12500;
@@ -258,27 +337,34 @@ export default function Dashboard({
       return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
     };
 
-    const todaySpec = parseDateSpec(todayStr);
-
-    // Calculate monthActualNetIncomeBeforeToday (days 1 to yesterday)
-    // and monthActualNetIncomeUpToToday (days 1 to today) conforming with the user's criteria:
-    // No entries on days 1..22 => 0, Today 23rd => 1260
-    let monthActualNetIncomeBeforeToday = 0;
-    let monthActualNetIncomeUpToToday = 0;
     let openDaysCount = 0;
     let closedDaysCount = 0;
     const closedDaysList: string[] = [];
     const openDaysList: string[] = [];
 
-    for (let d = 1; d <= todaySpec.day; d++) {
-      const dateStr = `${todaySpec.year}-${String(todaySpec.month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      
-      const dayIncomeMetrics = getDailyIncomeMetrics(dateStr, incomeList);
-      
+    // Enumerate every date of the current accounting period, from period start
+    // (03 of the period month) up to today.
+    const periodStart = getAccountingPeriodRange(currentMonthPrefix).start;
+    const periodDayList: string[] = [];
+    {
+      const cursor = new Date(
+        parseInt(periodStart.substring(0, 4), 10),
+        parseInt(periodStart.substring(5, 7), 10) - 1,
+        parseInt(periodStart.substring(8, 10), 10)
+      );
+      const todayDate = new Date();
+      while (cursor.getTime() <= todayDate.getTime()) {
+        periodDayList.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+
+    periodDayList.forEach(dateStr => {
       // Check if there are any income entries at all for this specific date
       const hasIncomeEntries = incomeList.some(i => {
         const spec = parseDateSpec(i.date);
-        return spec.year === todaySpec.year && spec.month === todaySpec.month && spec.day === d;
+        const dsSpec = parseDateSpec(dateStr);
+        return spec.year === dsSpec.year && spec.month === dsSpec.month && spec.day === dsSpec.day;
       });
 
       if (hasIncomeEntries) {
@@ -288,36 +374,28 @@ export default function Dashboard({
         closedDaysCount++;
         closedDaysList.push(dateStr);
       }
+    });
 
-      let dayActualProfit = 0;
-      if (hasIncomeEntries) {
-        const dayCashIncome = dayIncomeMetrics.cash;
-        const dayExpense = expenseList
-          .filter(e => {
-            const spec = parseDateSpec(e.date);
-            return spec.year === todaySpec.year && spec.month === todaySpec.month && spec.day === d;
-          })
-          .reduce((sum, item) => sum + item.amount, 0);
-        
-        dayActualProfit = dayCashIncome - dayExpense;
-      }
+    // Month net income cards: revenue − expense, all payment methods, locked
+    // daily totals respected, up to yesterday / up to today (accounting period).
+    const monthActualNetIncomeBeforeToday = periodYesterdaySummary.totalRevenue - periodYesterdaySummary.totalExpense;
+    const monthActualNetIncomeUpToToday = periodTodaySummary.totalRevenue - periodTodaySummary.totalExpense;
 
-      if (d < todaySpec.day) {
-        monthActualNetIncomeBeforeToday += dayActualProfit;
-      }
-      monthActualNetIncomeUpToToday += dayActualProfit;
-    }
+    // মোট লাভ = মোট সেবা রাজস্ব − (পরিচালন ব্যয় + স্থায়ী ব্যয়) — same model as
+    // the smart report, so the dashboard total always matches the report total.
+    const monthlyNetProfit = periodTodaySummary.totalProfit;
 
-    const monthlyNetProfit = monthActualNetIncomeUpToToday;
-
-    // Fixed cost calculations for daily loss
-    const rentVal = settings?.monthlyRent ?? 6000;
-    const elecVal = settings?.monthlyElectricity ?? 1850;
-    const netVal = settings?.monthlyInternet ?? 800;
-    const salVal = settings?.monthlySalary ?? 8000;
-    const extraVal = expenseList
-      .filter(e => e.date.startsWith(currentMonthPrefix) && !['RENT', 'ELECTRICITY', 'INTERNET', 'SALARY'].includes(e.category))
-      .reduce((sum, item) => sum + item.amount, 0);
+    // Fixed cost calculations for daily loss (recorded || configured, salary
+    // obligation when the salary system is active — from the shared model)
+    const fixVal = (cat: string) => {
+      const entry = periodTodaySummary.fixedBreakdown.find(f => f.cat === cat);
+      return entry ? entry.value : 0;
+    };
+    const rentVal = fixVal('RENT');
+    const elecVal = fixVal('ELECTRICITY');
+    const netVal = fixVal('INTERNET');
+    const salVal = fixVal('SALARY');
+    const extraVal = periodTodaySummary.extraVariableExpense;
 
     const totalDeductionsForMonth = rentVal + elecVal + netVal + salVal + extraVal;
     const dailyFixedLoss = Math.round(totalDeductionsForMonth / 30);
@@ -374,12 +452,17 @@ export default function Dashboard({
       dailyFixedLoss,
       totalClosedDaysLoss,
       averageIncomePerOpenDay,
-      totalDeductionsForMonth
+      totalDeductionsForMonth,
+      rentVal,
+      elecVal,
+      netVal,
+      salVal
     };
-  }, [incomeList, expenseList, bkashList, settings]);
+  }, [incomeList, expenseList, bkashList, settings, salaryData, currentMonthPrefix, expenseCategories, todayStr, yesterdayStr]);
 
   // Day-by-day real income breakdown for the current month (1 → today)
   const dailyIncomeBreakdown = useMemo(() => {
+    const salaryActive = !!(salaryData && salaryData.active);
     const [yy, mm, dd] = todayStr.split('-').map(x => parseInt(x, 10));
     const rows: { dateStr: string; day: number; income: number; expense: number; profit: number; hasEntries: boolean }[] = [];
     for (let d = 1; d <= dd; d++) {
@@ -387,22 +470,22 @@ export default function Dashboard({
       const dayMetrics = getDailyIncomeMetrics(dateStr, incomeList);
       const hasEntries = incomeList.some(i => i.date === dateStr);
       const dayExpense = expenseList
-        .filter(e => e.date === dateStr)
+        .filter(e => e.date === dateStr && (!salaryActive || e.category !== 'SALARY'))
         .reduce((sum, item) => sum + item.amount, 0);
       const profit = hasEntries ? dayMetrics.cash - dayExpense : 0;
       rows.push({ dateStr, day: d, income: hasEntries ? dayMetrics.cash : 0, expense: hasEntries ? dayExpense : 0, profit, hasEntries });
     }
     return rows.reverse(); // newest first
-  }, [incomeList, expenseList, todayStr]);
+  }, [incomeList, expenseList, todayStr, salaryData]);
 
-  // Dynamic monthly calculations based on SystemSettings (Owner Only)
-  const rentSetting = settings.monthlyRent ?? 6000;
-  const electricitySetting = settings.monthlyElectricity ?? 1850;
-  const internetSetting = settings.monthlyInternet ?? 800;
-  const salarySetting = settings.monthlySalary ?? 8000;
+  // Fixed cost figures for the period summary card — from the shared financial
+  // model (recorded || configured), so the card always matches the profit math.
+  const totalDeductions = metrics.totalDeductionsForMonth;
 
-  const totalDeductions = rentSetting + electricitySetting + internetSetting + salarySetting;
-  const netProfitMonth = metrics.monthIncomeUpToToday - totalDeductions;
+  // মোট লাভ for the current period — computed by the single shared financial
+  // model, so this always equals the smart report's profit figure for the same
+  // period (revenue − operating − fixed, salary obligation integrated).
+  const netProfitMonth = metrics.monthlyNetProfit;
 
   // % Comparison to yesterday (Income)
   const incomeTrendPercentage = useMemo(() => {
@@ -529,9 +612,10 @@ export default function Dashboard({
             <button
               id="btn-dashboard-quick-income-submit"
               type="submit"
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 text-xs rounded-xl cursor-pointer transition duration-150 active:scale-95 text-center flex items-center justify-center"
+              disabled={dashboardQuickSubmitting}
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 text-xs rounded-xl cursor-pointer transition duration-150 active:scale-95 text-center flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              ইনকাম সেভ করুন
+              {dashboardQuickSubmitting ? 'সংরক্ষণ হচ্ছে...' : 'ইনকাম সেভ করুন'}
             </button>
           </form>
         </div>
@@ -701,11 +785,11 @@ export default function Dashboard({
                   <p className="text-xs text-slate-500 italic py-2 text-center">আজ কোনো খরচ এন্ট্রি করা হয়নি।</p>
                 ) : (
                   expenseList.filter(e => e.date === todayStr).map(record => {
-                    const meta = EXPENSE_METADATA[record.category];
+                    const meta = catMap[record.category] || EXPENSE_METADATA[record.category];
                     return (
                       <div key={record.id} className="flex justify-between items-center text-xs p-2 bg-slate-900 border border-slate-850 rounded-xl">
                         <div className="flex items-center space-x-2">
-                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${meta?.color || 'bg-indigo-500'}`}></span>
                           <div>
                             <span className="font-semibold text-slate-300">{meta?.bangla || record.category}</span>
                             <span className="block text-[10px] text-slate-500">{record.time} • {record.note}</span>
@@ -836,7 +920,7 @@ export default function Dashboard({
                       <span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>
                       ঘর ভাড়া (Shop Rent)
                     </span>
-                    <span className="font-semibold text-slate-200 font-mono">৳{rentSetting.toLocaleString('bn-BD')}</span>
+                    <span className="font-semibold text-slate-200 font-mono">৳{metrics.rentVal.toLocaleString('bn-BD')}</span>
                   </div>
 
                   {/* Electricity */}
@@ -845,7 +929,7 @@ export default function Dashboard({
                       <span className="w-2 h-2 rounded-full bg-amber-500 mr-2"></span>
                       বিদ্যুৎ বিল (Electricity Bill)
                     </span>
-                    <span className="font-semibold text-slate-200 font-mono">৳{electricitySetting.toLocaleString('bn-BD')}</span>
+                    <span className="font-semibold text-slate-200 font-mono">৳{metrics.elecVal.toLocaleString('bn-BD')}</span>
                   </div>
 
                   {/* Internet */}
@@ -854,7 +938,7 @@ export default function Dashboard({
                       <span className="w-2 h-2 rounded-full bg-cyan-500 mr-2"></span>
                       নেট বিল / ওয়াইফাই (Internet Bill)
                     </span>
-                    <span className="font-semibold text-slate-200 font-mono">৳{internetSetting.toLocaleString('bn-BD')}</span>
+                    <span className="font-semibold text-slate-200 font-mono">৳{metrics.netVal.toLocaleString('bn-BD')}</span>
                   </div>
 
                   {/* Employee Salary */}
@@ -863,7 +947,7 @@ export default function Dashboard({
                       <span className="w-2 h-2 rounded-full bg-purple-500 mr-2"></span>
                       কর্মচারী বেতন (Staff Salary)
                     </span>
-                    <span className="font-semibold text-slate-200 font-mono">৳{salarySetting.toLocaleString('bn-BD')}</span>
+                    <span className="font-semibold text-slate-200 font-mono">৳{metrics.salVal.toLocaleString('bn-BD')}</span>
                   </div>
 
                   {/* Total Cost Deductions */}
@@ -940,7 +1024,7 @@ export default function Dashboard({
               </div>
               
               <div className="text-right">
-                <span className="text-[10px] text-slate-500 font-mono">চলতি মাস পিরিয়ড: {todayStr.substring(0, 7)}</span>
+                <span className="text-[10px] text-slate-500 font-mono">চলতি মাস পিরিয়ড: {currentMonthPrefix}</span>
               </div>
             </div>
 
@@ -1313,6 +1397,7 @@ export default function Dashboard({
             </div>
 
             <div className="overflow-y-auto flex-1 -mr-2 pr-2">
+              <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-slate-900">
                   <tr className="text-slate-500 border-b border-slate-800">
@@ -1359,6 +1444,7 @@ export default function Dashboard({
                   </tr>
                 </tfoot>
               </table>
+              </div>
             </div>
           </div>
         </div>

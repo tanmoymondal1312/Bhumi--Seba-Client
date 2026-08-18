@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import pool from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { isValidDate } from '../validation';
 
 const router = Router();
 
@@ -26,6 +27,15 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { title, date } = req.body;
     const id = `rem-${Date.now()}`;
+
+    if (!title || String(title).trim() === '') {
+      res.status(400).json({ message: 'রিমাইন্ডারের শিরোনাম দিন।' });
+      return;
+    }
+    if (!isValidDate(date)) {
+      res.status(400).json({ message: 'তারিখ সঠিক নয়।' });
+      return;
+    }
 
     await pool.execute(
       'INSERT INTO reminders (id, title, date, is_completed) VALUES (?, ?, ?, FALSE)',

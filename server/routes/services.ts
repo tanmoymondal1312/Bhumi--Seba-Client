@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import pool from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { isPositiveAmount } from '../validation';
 
 const router = Router();
 
@@ -28,6 +29,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { serviceKey, bangla, english, color, defaultPrice } = req.body;
 
+    // Phase 6 hardening: no empty keys/labels, price must be a valid amount.
+    if (!serviceKey || String(serviceKey).trim() === '') {
+      res.status(400).json({ message: 'সার্ভিস কী দিন।' });
+      return;
+    }
+    if (!bangla || String(bangla).trim() === '') {
+      res.status(400).json({ message: 'সার্ভিসের বাংলা নাম দিন।' });
+      return;
+    }
+    if (!isPositiveAmount(defaultPrice)) {
+      res.status(400).json({ message: 'সার্ভিসের ডিফল্ট মূল্য 0 এর বেশি হতে হবে।' });
+      return;
+    }
+
     const [existing] = await pool.execute(
       'SELECT MAX(sort_order) as maxOrder FROM services_metadata'
     );
@@ -49,6 +64,15 @@ router.put('/:key', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { key } = req.params;
     const { bangla, english, color, defaultPrice } = req.body;
+
+    if (!bangla || String(bangla).trim() === '') {
+      res.status(400).json({ message: 'সার্ভিসের বাংলা নাম দিন।' });
+      return;
+    }
+    if (!isPositiveAmount(defaultPrice)) {
+      res.status(400).json({ message: 'সার্ভিসের ডিফল্ট মূল্য 0 এর বেশি হতে হবে।' });
+      return;
+    }
 
     await pool.execute(
       'UPDATE services_metadata SET bangla = ?, english = ?, color = ?, default_price = ? WHERE service_key = ?',

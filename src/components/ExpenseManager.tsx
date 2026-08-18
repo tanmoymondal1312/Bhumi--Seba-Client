@@ -7,14 +7,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { User, ExpenseRecord, ExpenseCategory, ExpenseCategoryMeta } from '../types';
 import { EXPENSE_METADATA } from '../data/mockData';
 import { api } from '../api/client';
-import { getTodayStr, formatBanglaDate } from '../utils/finance';
+import { getTodayStr, formatBanglaDate, getAccountingPeriodForDate } from '../utils/finance';
 import { Layers, AlertTriangle, HelpCircle, Check, Trash2, Calendar, DollarSign, StickyNote, ImagePlus, X, Eye, Plus } from 'lucide-react';
 
 interface ExpenseManagerProps {
   expenseList: ExpenseRecord[];
   currentUser: User;
   expenseAlertThreshold: number;
-  onAddExpense: (record: Omit<ExpenseRecord, 'id'>) => void;
+  onAddExpense: (record: Omit<ExpenseRecord, 'id'>) => void | Promise<{ success: boolean; message?: string }>;
   onDeleteExpense?: (id: string) => void;
   expenseCategories?: Record<string, ExpenseCategoryMeta>;
 }
@@ -51,6 +51,8 @@ export default function ExpenseManager({
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string>('');
   const [filterCat, setFilterCat] = useState<string>('ALL');
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
@@ -67,11 +69,13 @@ export default function ExpenseManager({
   // Trigger high expense alerts before submitting, to simulate risk check
   const isHighExpenseAlert = amount && parseFloat(amount) >= expenseAlertThreshold;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setSubmitError('');
     const cleanAmount = parseFloat(amount);
     if (isNaN(cleanAmount) || cleanAmount <= 0) {
-      alert('সঠিক খরচের টাকার পরিমাণ দিন দয়া করে।');
+      alert('সঠিক খরচের টাকার পরিমাণ দিন দয়া করে।');
       return;
     }
 
@@ -82,15 +86,16 @@ export default function ExpenseManager({
     const timeFormatted = `${hours}:${minutes}`;
 
     if (catMap[category]?.isFixed) {
-      const monthPrefix = dateFormatted.substring(0, 7); // '2026-06'
-      const hasDuplicate = expenseList.some(item => item.category === category && item.date.startsWith(monthPrefix));
+      const periodPrefix = getAccountingPeriodForDate(dateFormatted);
+      const hasDuplicate = expenseList.some(item => item.category === category && getAccountingPeriodForDate(item.date) === periodPrefix);
       if (hasDuplicate) {
-        alert(`এই মাসে ইতিমধ্যে একবার "${(catMap[category]?.bangla || category)}" বাবদ খরচ এন্ট্রি করা হয়েছে। নিয়ম অনুযায়ী এক মাসে একবারই এই এন্ট্রি দেওয়া যাবে!`);
+        alert(`এই মাসে ইতিমধ্যে একবার "${(catMap[category]?.bangla || category)}" বাবদ খরচ এন্ট্রি করা হয়েছে। নিয়ম অনুযায়ী এক মাসে একবারই এই এন্ট্রি দেওয়া যাবে!`);
         return;
       }
     }
 
-    onAddExpense({
+    setIsSubmitting(true);
+    const result = await onAddExpense({
       date: dateFormatted,
       time: timeFormatted,
       category,
@@ -98,6 +103,12 @@ export default function ExpenseManager({
       enteredBy: currentUser.name,
       note: note.trim() || `${(catMap[category]?.bangla || category)} বাবদ ব্যয়`
     });
+    setIsSubmitting(false);
+
+    if (result && !result.success) {
+      setSubmitError(result.message || 'খরচ সংরক্ষণ ব্যর্থ হয়েছে।');
+      return;
+    }
 
     setAmount('');
     setNote('');
@@ -214,10 +225,17 @@ export default function ExpenseManager({
           <button
             id="btn-submit-expense-entry"
             type="submit"
-            className="w-full py-2.5 text-center bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/10 active:scale-95 transition cursor-pointer"
+            disabled={isSubmitting}
+            className="w-full py-2.5 text-center bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/10 active:scale-95 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            দোকানের খরচ লিপিবদ্ধ করুন
+            {isSubmitting ? 'সংরক্ষণ হচ্ছে...' : 'দোকানের খরচ লিপিবদ্ধ করুন'}
           </button>
+
+          {submitError && (
+            <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] rounded-xl p-2.5 font-medium">
+              {submitError}
+            </div>
+          )}
 
         </form>
       </div>
@@ -250,7 +268,12 @@ export default function ExpenseManager({
               { id: 'RENT', label: 'দোকান ভাড়া' },
               { id: 'ELECTRICITY', label: 'কারেন্ট বিল' },
               { id: 'OFFICE', label: 'অফিস / ক্যাটারিং' },
-              { id: 'PRINT', label: 'কাগজ / পেপার' }
+              { id: 'PRINT', label: 'কাগজ / পেপার' },
+              { id: 'COURT_FEE', label: 'কোর্ট ফি ক্রয়' },
+              { id: 'A4_PAPER', label: 'এফোর কাগজ ক্রয়' },
+              { id: 'LEGAL_PAPER', label: 'লিগ্যাল কাগজ ক্রয়' },
+              { id: 'COLOR_PAPER', label: 'রঙিন কাগজ ক্রয়' },
+              { id: 'STAMP', label: 'স্ট্যাম্প ক্রয়' }
             ].map(cat => (
               <button
                 key={cat.id}

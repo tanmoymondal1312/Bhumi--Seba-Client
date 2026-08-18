@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
-import { User, IncomeRecord, ExpenseRecord, BKashRecord, DueRecord } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { User, IncomeRecord, ExpenseRecord, BKashRecord, DueRecord, SystemSettings, ExpenseCategoryMeta, SalarySnapshot } from '../types';
 import { SERVICE_METADATA, EXPENSE_METADATA } from '../data/mockData';
-import { getDailyIncomeMetrics, getIncomeSum, getTodayStr, formatBanglaDate } from '../utils/finance';
+import { getDailyIncomeMetrics, getIncomeSum, getTodayStr, formatBanglaDate, getCurrentAccountingPeriod, getAccountingPeriodForDate, getAccountingPeriodRange, isInAccountingPeriod } from '../utils/finance';
+import { computePeriodSummary } from '../utils/financialModel';
+import { api } from '../api/client';
 import { 
   TrendingUp, TrendingDown, Clock, Award, AlertCircle, 
   Download, Printer, FileSpreadsheet, CheckCircle2, RefreshCw,
@@ -21,10 +23,19 @@ interface ReportsManagerProps {
   currentUser: User;
   servicesMetadata?: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>;
   duesList?: DueRecord[];
+  settings?: SystemSettings;
+  expenseCategories?: Record<string, ExpenseCategoryMeta>;
 }
 
-export default function ReportsManager({ incomeList, expenseList, bkashList = [], currentUser, servicesMetadata, duesList = [] }: ReportsManagerProps) {
+export default function ReportsManager({ incomeList, expenseList, bkashList = [], currentUser, servicesMetadata, duesList = [], settings, expenseCategories }: ReportsManagerProps) {
   const isOwner = currentUser.role !== 'STAFF';
+
+  // Fixed vs variable expense classification — reuses the existing isFixed flag
+  // from category metadata (DB expense_categories synced via App state, fallback EXPENSE_METADATA).
+  const catIsFixed = (cat: string): boolean => {
+    const meta = (expenseCategories && expenseCategories[cat]) || (EXPENSE_METADATA as Record<string, { isFixed: boolean }>)[cat];
+    return !!(meta && meta.isFixed);
+  };
 
   // বাকির খাতা — group outstanding dues by customer
   const duesByCustomer = useMemo(() => {
@@ -54,17 +65,18 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
 
   const duesGrandTotal = duesByCustomer.reduce((s, d) => s + d.total, 0);
 
-  // Dynamic Months List
+  // Dynamic Months List — accounting periods (each period = 3rd of its month
+  // through the 2nd of the following month)
   const sortedMonthsList = useMemo(() => {
     const monthsSet = new Set<string>();
     incomeList.forEach(inc => {
-      if (inc.date && inc.date.length >= 7) {
-        monthsSet.add(inc.date.substring(0, 7));
+      if (inc.date && inc.date.length >= 10) {
+        monthsSet.add(getAccountingPeriodForDate(inc.date));
       }
     });
     expenseList.forEach(exp => {
-      if (exp.date && exp.date.length >= 7) {
-        monthsSet.add(exp.date.substring(0, 7));
+      if (exp.date && exp.date.length >= 10) {
+        monthsSet.add(getAccountingPeriodForDate(exp.date));
       }
     });
     if (monthsSet.size === 0) {
@@ -73,28 +85,66 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
     return Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
   }, [incomeList, expenseList]);
 
-  // Selected Month State for Owner Report
+  // Selected Month State for Owner Report — defaults to the current accounting
+  // period (previous period stays active through the 2nd; new period from the 3rd)
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const today = new Date();
-    const currentMonthStr = today.toISOString().substring(0, 7); // "2026-06"
+    const currentMonthStr = getCurrentAccountingPeriod();
     
     const monthsSet = new Set<string>();
-    incomeList.forEach(inc => { if (inc.date && inc.date.length >= 7) monthsSet.add(inc.date.substring(0, 7)); });
-    expenseList.forEach(exp => { if (exp.date && exp.date.length >= 7) monthsSet.add(exp.date.substring(0, 7)); });
+    incomeList.forEach(inc => { if (inc.date && inc.date.length >= 10) monthsSet.add(getAccountingPeriodForDate(inc.date)); });
+    expenseList.forEach(exp => { if (exp.date && exp.date.length >= 10) monthsSet.add(getAccountingPeriodForDate(exp.date)); });
     const list = Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
     
     if (list.includes(currentMonthStr)) return currentMonthStr;
     return list[0] || currentMonthStr;
   });
 
-  // Calculate detailed stats for the selected active month
-  const activeMonthReport = useMemo(() => {
-    const mIncomes = incomeList.filter(inc => inc.date.startsWith(selectedMonth));
-    const mExpenses = expenseList.filter(exp => exp.date.startsWith(selectedMonth));
+  // Salary obligation snapshot for the selected period (Phase 4). When the
+  // salary system is active for a period, the staff salary obligation replaces
+  // the legacy SALARY expense / settings fallback to avoid double counting.
+  const [salaryData, setSalaryData] = useState<SalarySnapshot | null>(null);
 
-    const totalIncome = mIncomes.reduce((sum, item) => sum + item.amount, 0);
-    const totalExpense = mExpenses.reduce((sum, item) => sum + item.amount, 0);
-    const netProfit = totalIncome - totalExpense;
+  useEffect(() => {
+    let cancelled = false;
+    api.salary
+      .getForPeriod(selectedMonth)
+      .then((data) => { if (!cancelled) setSalaryData(data); })
+      .catch((err) => console.error('Salary snapshot load error:', err));
+    return () => { cancelled = true; };
+  }, [selectedMonth]);
+
+  // Calculate detailed stats for the selected active month (accounting period)
+  const activeMonthReport = useMemo(() => {
+    const mIncomes = incomeList.filter(inc => inc.date && inc.date.length >= 10 && isInAccountingPeriod(inc.date, selectedMonth));
+
+    const today = getTodayStr();
+    const isCurrentPeriod = getCurrentAccountingPeriod() === selectedMonth;
+
+    // Accounting period span: start = 03 of the period month, end = 02 of the
+    // next calendar month (the previous period stays active through the 2nd).
+    const periodRange = getAccountingPeriodRange(selectedMonth);
+    const endDate = isCurrentPeriod && today > periodRange.start ? today : periodRange.end;
+
+    // ONE financial calculation model (Phase 5) — shared with the Dashboard
+    // and the backend /api/financials/summary endpoint, so every module
+    // derives identical totals for the same accounting period.
+    const summary = computePeriodSummary({
+      incomes: incomeList,
+      expenses: expenseList,
+      period: selectedMonth,
+      settings,
+      salarySnapshot: salaryData,
+      catIsFixed,
+      maxDate: endDate,
+    });
+
+    const totalIncome = summary.totalRevenue;
+    const totalExpense = summary.totalExpense;
+    const recordedFixedExpense = summary.recordedFixedExpense;
+    const fixedExpense = summary.fixedExpense;
+    const operatingExpense = summary.operatingExpense;
+    const totalProfit = summary.totalProfit;
+    const salaryActive = summary.salaryActive;
 
     // Service wise income breakdown
     const servicesMap: Record<string, { count: number; sum: number }> = {};
@@ -125,13 +175,14 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
       };
     }).sort((a, b) => b.sum - a.sum);
 
-    // Expense category breakdown
+    // Expense category breakdown (SALARY records excluded when the salary
+    // system is active — same list the totals are computed from)
     const expensesMap: Record<string, { sum: number; count: number }> = {};
     Object.keys(EXPENSE_METADATA).forEach(cat => {
       expensesMap[cat] = { sum: 0, count: 0 };
     });
 
-    mExpenses.forEach(exp => {
+    summary.periodExpenses.forEach(exp => {
       if (!expensesMap[exp.category]) {
         expensesMap[exp.category] = { sum: 0, count: 0 };
       }
@@ -150,22 +201,23 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
       };
     }).sort((a, b) => b.sum - a.sum);
 
-    const [yearValStr, monthValStr] = selectedMonth.split('-');
-    const reportYear = parseInt(yearValStr, 10);
-    const reportMonthNum = parseInt(monthValStr, 10);
-    const today = new Date();
-    const isCurrentMonth = today.getFullYear() === reportYear && (today.getMonth() + 1) === reportMonthNum;
-
-    const daysInMonth = new Date(reportYear, reportMonthNum, 0).getDate();
-    const endDay = isCurrentMonth ? today.getDate() : daysInMonth;
-
     let openDaysCount = 0;
     let closedDaysCount = 0;
     const closedDaysList: string[] = [];
     const openDaysList: string[] = [];
 
-    for (let d = 1; d <= endDay; d++) {
-      const dateStr = `${yearValStr}-${monthValStr}-${String(d).padStart(2, '0')}`;
+    const dateCursor = new Date(
+      parseInt(periodRange.start.substring(0, 4), 10),
+      parseInt(periodRange.start.substring(5, 7), 10) - 1,
+      parseInt(periodRange.start.substring(8, 10), 10)
+    );
+    const endCursor = new Date(
+      parseInt(endDate.substring(0, 4), 10),
+      parseInt(endDate.substring(5, 7), 10) - 1,
+      parseInt(endDate.substring(8, 10), 10)
+    );
+    while (dateCursor.getTime() <= endCursor.getTime()) {
+      const dateStr = `${dateCursor.getFullYear()}-${String(dateCursor.getMonth() + 1).padStart(2, '0')}-${String(dateCursor.getDate()).padStart(2, '0')}`;
       const hasIncome = incomeList.some(inc => inc.date === dateStr);
       if (hasIncome) {
         openDaysCount++;
@@ -174,23 +226,26 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
         closedDaysCount++;
         closedDaysList.push(dateStr);
       }
+      dateCursor.setDate(dateCursor.getDate() + 1);
     }
 
-    const rentVal = mExpenses.filter(e => e.category === 'RENT').reduce((sum, item) => sum + item.amount, 0) || 6000;
-    const elecVal = mExpenses.filter(e => e.category === 'ELECTRICITY').reduce((sum, item) => sum + item.amount, 0) || 1850;
-    const netVal = mExpenses.filter(e => e.category === 'INTERNET').reduce((sum, item) => sum + item.amount, 0) || 800;
-    const salVal = mExpenses.filter(e => e.category === 'SALARY').reduce((sum, item) => sum + item.amount, 0) || 8000;
-    const extraVal = mExpenses
-      .filter(e => !['RENT', 'ELECTRICITY', 'INTERNET', 'SALARY'].includes(e.category))
-      .reduce((sum, item) => sum + item.amount, 0);
+    const fixVal = (cat: string) => {
+      const entry = summary.fixedBreakdown.find(f => f.cat === cat);
+      return entry ? entry.value : 0;
+    };
+    const rentVal = fixVal('RENT');
+    const elecVal = fixVal('ELECTRICITY');
+    const netVal = fixVal('INTERNET');
+    const salVal = fixVal('SALARY');
+    const extraVal = summary.extraVariableExpense;
 
-    const totalDeductions = rentVal + elecVal + netVal + salVal + extraVal;
+    const totalDeductions = summary.fixedExpense + summary.extraVariableExpense;
     const dailyFixedLoss = Math.round(totalDeductions / 30);
     const totalClosedDaysLoss = closedDaysCount * dailyFixedLoss;
     const averageIncomePerOpenDay = openDaysCount > 0 ? Math.round(totalIncome / openDaysCount) : 0;
 
-    // bKash Monthly Financial calculations
-    const monthBkashItems = bkashList.filter(item => item.date.startsWith(selectedMonth));
+    // bKash Monthly Financial calculations (same accounting period)
+    const monthBkashItems = bkashList.filter(item => item.date && item.date.length >= 10 && isInAccountingPeriod(item.date, selectedMonth));
     const totalBkashIn = monthBkashItems
       .filter(item => item.type === 'IN')
       .reduce((sum, item) => sum + item.amount, 0);
@@ -214,7 +269,9 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
     return {
       totalIncome,
       totalExpense,
-      netProfit,
+      operatingExpense,
+      fixedExpense,
+      totalProfit,
       servicesReport,
       expensesReport,
       monthLabel: monthLabelVal,
@@ -237,7 +294,7 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
       totalBkashOut,
       bkashItemsCount: monthBkashItems.length
     };
-  }, [selectedMonth, incomeList, expenseList, bkashList, servicesMetadata]);
+  }, [selectedMonth, incomeList, expenseList, bkashList, servicesMetadata, settings, expenseCategories, salaryData]);
 
   // Exporting simulation state
   const [exportModal, setExportModal] = useState<boolean>(false);
@@ -350,24 +407,25 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
   };
 
   const smartMonthlyReport = useMemo(() => {
-    // Collect all unique months present in both lists (YYYY-MM)
+    // Collect all unique accounting periods present in both lists (YYYY-MM;
+    // each period = 3rd of the month through the 2nd of the following month)
     const monthsSet = new Set<string>();
     incomeList.forEach(inc => {
-      if (inc.date && inc.date.length >= 7) {
-        monthsSet.add(inc.date.substring(0, 7));
+      if (inc.date && inc.date.length >= 10) {
+        monthsSet.add(getAccountingPeriodForDate(inc.date));
       }
     });
     expenseList.forEach(exp => {
-      if (exp.date && exp.date.length >= 7) {
-        monthsSet.add(exp.date.substring(0, 7));
+      if (exp.date && exp.date.length >= 10) {
+        monthsSet.add(getAccountingPeriodForDate(exp.date));
       }
     });
 
     const sortedMonths = Array.from(monthsSet).sort((a, b) => b.localeCompare(a));
 
     return sortedMonths.map(month => {
-      const monthIncomes = incomeList.filter(inc => inc.date.startsWith(month));
-      const monthExpenses = expenseList.filter(exp => exp.date.startsWith(month));
+      const monthIncomes = incomeList.filter(inc => inc.date && inc.date.length >= 10 && isInAccountingPeriod(inc.date, month));
+      const monthExpenses = expenseList.filter(exp => exp.date && exp.date.length >= 10 && isInAccountingPeriod(exp.date, month));
 
       // Group income by service type
       const serviceCounts: Record<string, number> = {};
@@ -431,8 +489,8 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
 
   const handlePrintPDF = () => {
     const r = activeMonthReport;
-    const profitColor = r.netProfit >= 0 ? '#059669' : '#dc2626';
-    const profitLabel = r.netProfit >= 0 ? 'নিট লাভ' : 'নিট লোকসান';
+    const profitColor = r.totalProfit >= 0 ? '#059669' : '#dc2626';
+    const profitLabel = r.totalProfit >= 0 ? 'মোট লাভ' : 'মোট লোকসান';
     const now = new Date();
     const printTime = now.toLocaleString('bn-BD', { dateStyle: 'long', timeStyle: 'short' });
 
@@ -479,16 +537,22 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
 
   .body { padding:32px 40px 40px; }
 
-  .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px; }
+  .summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px; }
   .summary-card { border-radius:12px; padding:20px; text-align:center; border:1px solid #e2e8f0; }
   .summary-card.green { background:linear-gradient(135deg,#ecfdf5,#d1fae5); border-color:#a7f3d0; }
   .summary-card.red { background:linear-gradient(135deg,#fef2f2,#fee2e2); border-color:#fecaca; }
   .summary-card.blue { background:linear-gradient(135deg,#eff6ff,#dbeafe); border-color:#bfdbfe; }
+  .summary-card.amber { background:linear-gradient(135deg,#fffbeb,#fef3c7); border-color:#fde68a; }
   .summary-card .label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px; color:#64748b; margin-bottom:6px; }
   .summary-card .amount { font-size:26px; font-weight:800; }
   .summary-card.green .amount { color:#059669; }
   .summary-card.red .amount { color:#dc2626; }
   .summary-card.blue .amount { color:#2563eb; }
+  .summary-card.amber .amount { color:#d97706; }
+
+  @media (max-width:640px) {
+    .summary-grid { grid-template-columns:repeat(2,1fr); }
+  }
 
   .section { margin-bottom:28px; }
   .section-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #e2e8f0; }
@@ -553,7 +617,7 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
   </div>
 
   <div class="meta-strip">
-    <div>প্রস্তুতকারক: <span>${currentUser.name}</span> (${currentUser.role === 'STAFF' ? 'কর্মচারী' : 'মালিক'})</div>
+    <div>প্রস্তুতকারক: <span>প্রাইম নেটওয়ার্ক</span></div>
     <div>প্রস্তুতের সময়: <span>${printTime}</span></div>
     <div>রিপোর্ট পিরিয়ড: <span>${selectedMonth}</span></div>
   </div>
@@ -566,11 +630,15 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
       </div>
       <div class="summary-card red">
         <div class="label">মোট পরিচালন ব্যয়</div>
-        <div class="amount">৳${r.totalExpense.toLocaleString()}</div>
+        <div class="amount">৳${r.operatingExpense.toLocaleString()}</div>
+      </div>
+      <div class="summary-card amber">
+        <div class="label">স্থায়ী ব্যয়</div>
+        <div class="amount">৳${r.fixedExpense.toLocaleString()}</div>
       </div>
       <div class="summary-card blue">
         <div class="label">${profitLabel}</div>
-        <div class="amount" style="color:${profitColor}">৳${r.netProfit.toLocaleString()}</div>
+        <div class="amount" style="color:${profitColor}">৳${r.totalProfit.toLocaleString()}</div>
       </div>
     </div>
 
@@ -616,7 +684,7 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
         <tbody>
           ${expenseRows || '<tr><td colspan="4" style="padding:16px;text-align:center;color:#94a3b8;">এই মাসে কোনো ব্যয় নেই</td></tr>'}
           <tr class="total-row">
-            <td colspan="3">সর্বমোট পরিচালন ব্যয়</td>
+            <td colspan="3">সর্বমোট ব্যয়</td>
             <td style="text-align:right;color:#dc2626;">৳${r.totalExpense.toLocaleString()}</td>
           </tr>
         </tbody>
@@ -626,21 +694,6 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
     <div class="section">
       <div class="section-header">
         <div class="section-num">৪</div>
-        <div class="section-title">স্থায়ী খরচ ব্রেকডাউন</div>
-      </div>
-      <div class="info-grid">
-        <div class="info-item"><span class="k">দোকান ঘর ভাড়া</span><span class="v">৳${r.rentVal.toLocaleString()}</span></div>
-        <div class="info-item"><span class="k">বিদ্যুৎ বিল</span><span class="v">৳${r.elecVal.toLocaleString()}</span></div>
-        <div class="info-item"><span class="k">ইন্টারনেট বিল</span><span class="v">৳${r.netVal.toLocaleString()}</span></div>
-        <div class="info-item"><span class="k">কর্মচারী বেতন</span><span class="v">৳${r.salVal.toLocaleString()}</span></div>
-        <div class="info-item"><span class="k">অন্যান্য খরচ</span><span class="v">৳${r.extraVal.toLocaleString()}</span></div>
-        <div class="info-item" style="background:#f1f5f9;border-color:#cbd5e1;"><span class="k" style="color:#0f172a;font-weight:700;">সর্বমোট স্থায়ী ব্যয়</span><span class="v" style="color:#dc2626;">৳${r.totalDeductions.toLocaleString()}</span></div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header">
-        <div class="section-num">৫</div>
         <div class="section-title">বিকাশ লেনদেন সারসংক্ষেপ</div>
       </div>
       <div class="bkash-grid">
@@ -679,16 +732,17 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
                ভূমি সেবা সহায়তা কেন্দ্র অডিট রিপোর্ট
 =======================================================
 রিপোর্ট পিরিয়ড: ${activeMonthReport.monthLabel} (${selectedMonth})
-প্রস্তুতকারক ইউজার: ${currentUser.name} (রোল: ${currentUser.role === 'STAFF' ? 'কর্মচারী' : 'দোকান মালিক'})
+প্রস্তুতকারক: প্রাইম নেটওয়ার্ক
 রিপোর্ট প্রস্তুতের সময়: ${new Date().toLocaleString('bn-BD')}
 =======================================================
 
 ১. সামগ্রিক আয়ের সারসংক্ষেপ (Overall Summary)
 -------------------------------------------------------
 মোট অর্জিত সেবা রাজস্ব (Revenue): ৳${activeMonthReport.totalIncome.toLocaleString('bn-BD')}
-মোট দোকান পরিচালন ব্যয় (Expense): ৳${activeMonthReport.totalExpense.toLocaleString('bn-BD')}
+মোট পরিচালন ব্যয় (Operating Expense): ৳${activeMonthReport.operatingExpense.toLocaleString('bn-BD')}
+স্থায়ী ব্যয় (Fixed Expense): ৳${activeMonthReport.fixedExpense.toLocaleString('bn-BD')}
 -------------------------------------------------------
-নিট লাভ/লোকসান (Net Profit/Loss): ৳${activeMonthReport.netProfit.toLocaleString('bn-BD')} ${activeMonthReport.netProfit >= 0 ? '[নিট লাভ]' : '[নিট লোকসান]'}
+মোট লাভ (Total Profit): ৳${activeMonthReport.totalProfit.toLocaleString('bn-BD')} ${activeMonthReport.totalProfit >= 0 ? '[মোট লাভ]' : '[মোট লোকসান]'}
 
 ২. দোকান উপস্থিতি ও পরিচালনা পরিসংখ্যান (Attendance & Loss Analysis)
 -------------------------------------------------------
@@ -705,17 +759,7 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
 (এর মধ্যে ক্যাশ-আউট পেমেন্ট: ৳${activeMonthReport.totalBkashOut.toLocaleString('bn-BD')}, সরকারি ফি: ৳${activeMonthReport.totalBkashPayment.toLocaleString('bn-BD')})
 মোট বিকাশ লেনদেন সংখ্যা: ${activeMonthReport.bkashItemsCount} টি ভাউচার
 
-৪. ইউটিলিটি ও পরিচালন খরচ ব্রেকডাউন (Utilities Breakdown)
--------------------------------------------------------
-ঘর ভাড়া (Rent): ৳${activeMonthReport.rentVal.toLocaleString('bn-BD')}
-কারেন্ট বিল (Electricity): ৳${activeMonthReport.elecVal.toLocaleString('bn-BD')}
-ইন্টারনেট বিল (Internet): ৳${activeMonthReport.netVal.toLocaleString('bn-BD')}
-স্টাফ বেতন (Salary): ৳${activeMonthReport.salVal.toLocaleString('bn-BD')}
-অন্যান্য সাধারণ খরচ (Office & Misc Expenses): ৳${activeMonthReport.extraVal.toLocaleString('bn-BD')}
--------------------------------------------------------
-সর্বমোট মাসিক পরিচালনা বাজেট খরচ: ৳${activeMonthReport.totalDeductions.toLocaleString('bn-BD')}
-
-৫. বিস্তারিত সেবা খাতভিত্তিক আয় (Service-wise Revenue)
+৪. বিস্তারিত সেবা খাতভিত্তিক আয় (Service-wise Revenue)
 -------------------------------------------------------
 ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}: ৳${svc.sum.toLocaleString('bn-BD')} (${svc.count} টি আবেদন)`).join('\n')}
 
@@ -948,12 +992,12 @@ ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}:
         </div>
 
         {/* 1. Monthly Summary Bento Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-6">
           
-          {/* Total Income Card */}
+          {/* Total Service Revenue Card */}
           <div className="bg-slate-950/60 border border-emerald-500/10 p-4.5 rounded-2xl flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[10px] text-emerald-400 uppercase font-black tracking-wider block">মোট অর্জিত আয়</span>
+              <span className="text-[10px] text-emerald-400 uppercase font-black tracking-wider block">মোট সেবা রাজস্ব</span>
               <p className="text-2xl font-black font-mono text-emerald-400">৳{activeMonthReport.totalIncome.toLocaleString()}</p>
               <span className="text-[10px] text-slate-500 block">সেবা প্রদান থেকে সংগৃহীত</span>
             </div>
@@ -962,39 +1006,51 @@ ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}:
             </div>
           </div>
 
-          {/* Total Expense Card */}
+          {/* Operating Expense Card */}
           <div className="bg-slate-950/60 border border-rose-500/10 p-4.5 rounded-2xl flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-[10px] text-rose-450 uppercase font-black tracking-wider block">মোট দোকান খরচ</span>
-              <p className="text-2xl font-black font-mono text-rose-450">৳{activeMonthReport.totalExpense.toLocaleString()}</p>
-              <span className="text-[10px] text-slate-500 block">স্থায়ী ও চলতি খরচের সমষ্টি</span>
+              <span className="text-[10px] text-rose-450 uppercase font-black tracking-wider block">মোট পরিচালন ব্যয়</span>
+              <p className="text-2xl font-black font-mono text-rose-450">৳{activeMonthReport.operatingExpense.toLocaleString()}</p>
+              <span className="text-[10px] text-slate-500 block">চলতি (পরিবর্তনশীল) খরচের সমষ্টি</span>
             </div>
             <div className="p-3 bg-rose-500/10 rounded-xl text-rose-400">
               <ArrowDownLeft className="w-6 h-6" />
             </div>
           </div>
 
-          {/* Net Profit Card */}
+          {/* Fixed Expense Card */}
+          <div className="bg-slate-950/60 border border-indigo-500/10 p-4.5 rounded-2xl flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-[10px] text-indigo-400 uppercase font-black tracking-wider block">স্থায়ী ব্যয়</span>
+              <p className="text-2xl font-black font-mono text-indigo-400">৳{activeMonthReport.fixedExpense.toLocaleString()}</p>
+              <span className="text-[10px] text-slate-500 block">ভাড়া, বিদ্যুৎ, নেট ও বেতন</span>
+            </div>
+            <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+              <Layers className="w-6 h-6" />
+            </div>
+          </div>
+
+          {/* Total Profit Card */}
           <div className={`p-4.5 rounded-2xl border flex items-center justify-between ${
-            activeMonthReport.netProfit >= 0 
+            activeMonthReport.totalProfit >= 0 
               ? 'bg-emerald-950/20 border-emerald-500/25' 
               : 'bg-rose-950/20 border-rose-500/25'
           }`}>
             <div className="space-y-1">
               <span className={`text-[10px] uppercase font-black tracking-wider block ${
-                activeMonthReport.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'
+                activeMonthReport.totalProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'
               }`}>
-                {activeMonthReport.netProfit >= 0 ? 'নিট লাভ (Net Profit) 👑' : 'নিট লোকসান (Net Loss) ⚠️'}
+                {activeMonthReport.totalProfit >= 0 ? 'মোট লাভ (Total Profit) 👑' : 'মোট লোকসান (Total Loss) ⚠️'}
               </span>
               <p className={`text-2xl font-black font-mono ${
-                activeMonthReport.netProfit >= 0 ? 'text-emerald-300' : 'text-rose-400'
+                activeMonthReport.totalProfit >= 0 ? 'text-emerald-300' : 'text-rose-400'
               }`}>
-                ৳{activeMonthReport.netProfit.toLocaleString()}
+                ৳{activeMonthReport.totalProfit.toLocaleString()}
               </p>
-              <span className="text-[10px] text-slate-400 block">হিসাবকৃত মূল ব্যবধান</span>
+              <span className="text-[10px] text-slate-400 block">রাজস্ব − (পরিচালন + স্থায়ী)</span>
             </div>
             <div className={`p-3 rounded-xl ${
-              activeMonthReport.netProfit >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+              activeMonthReport.totalProfit >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
             }`}>
               <DollarSign className="w-6 h-6" />
             </div>
@@ -1250,17 +1306,17 @@ ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}:
             </div>
             <div className="space-y-1">
               <span className="text-xs font-black text-slate-300 block">মালিকের জন্য স্মার্ট নোটিশ ও এআই আর্থিক পর্যালোচনা (Owner Audit Insights)</span>
-              <p className="text-xs text-slate-405 leading-relaxed">
-                {activeMonthReport.netProfit >= 0 ? (
+<p className="text-xs text-slate-405 leading-relaxed">
+                {activeMonthReport.totalProfit >= 0 ? (
                   <>
                     অর্থ বছর ২০২৬ এর <strong>{activeMonthReport.monthLabel}</strong> মাসে আপনার ব্যবসায়িক প্রফিট মার্জিন দারুণ রয়েছে। 
-                    মোট অর্জিত মুনাফা <strong className="text-emerald-400">৳{activeMonthReport.netProfit.toLocaleString()}</strong>। 
+                    মোট অর্জিত মুনাফা <strong className="text-emerald-400">৳{activeMonthReport.totalProfit.toLocaleString()}</strong>। 
                     সর্বোচ্চ অবদানকারী খাত ছিল <strong className="text-indigo-400">{activeMonthReport.servicesReport[0]?.bangla || 'N/A'} (৳{activeMonthReport.servicesReport[0]?.sum?.toLocaleString()})</strong>। 
                     চলতি ব্যয়ের রেশিও নিয়ন্ত্রণ করায় লাভজনক প্রবৃদ্ধি বজায় রয়েছে।
                   </>
                 ) : (
                   <>
-                    লক্ষ্য করুন! <strong>{activeMonthReport.monthLabel}</strong> মাসে দোকানের মোট আয়ের চেয়ে দোকানের ভাড়া ও অন্যান্য ইউটিলিটি খরচ বেশি ছিল, যা <strong className="text-rose-450">৳{Math.abs(activeMonthReport.netProfit).toLocaleString()}</strong> ঋণাত্মক প্রফিট মার্জিন বা লোকসান নির্দেশ করছে। দয়া করে চলতি ও পরিচালন ব্যয় নিয়ন্ত্রণে নজর রাখুন।
+                    লক্ষ্য করুন! <strong>{activeMonthReport.monthLabel}</strong> মাসে দোকানের মোট আয়ের চেয়ে পরিচালন ও স্থায়ী খরচ বেশি ছিল, যা <strong className="text-rose-450">৳{Math.abs(activeMonthReport.totalProfit).toLocaleString()}</strong> ঋণাত্মক প্রফিট মার্জিন বা লোকসান নির্দেশ করছে। দয়া করে চলতি ও পরিচালন ব্যয় নিয়ন্ত্রণে নজর রাখুন।
                   </>
                 )}
               </p>
@@ -1496,7 +1552,10 @@ ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}:
                   <span>মোট সেবা রাজস্ব:</span> <span className="text-emerald-400 font-bold">৳{activeMonthReport.totalIncome.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>মোট দোকান খরচ:</span> <span className="text-rose-400 font-bold">৳{activeMonthReport.totalExpense.toLocaleString()}</span>
+                  <span>মোট পরিচালন ব্যয়:</span> <span className="text-rose-400 font-bold">৳{activeMonthReport.operatingExpense.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>স্থায়ী ব্যয়:</span> <span className="text-indigo-400 font-bold">৳{activeMonthReport.fixedExpense.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-850 pt-1 border-dashed">
                   <span>দোকান খোলা ছিল:</span> <span className="text-slate-200 font-bold">{activeMonthReport.openDaysCount} দিন (গড়: ৳{activeMonthReport.averageIncomePerOpenDay}/দিন)</span>
@@ -1508,12 +1567,12 @@ ${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}:
                   <span>বন্ধ দিনের মোট লস:</span> <span className="text-rose-400 font-bold">৳{activeMonthReport.totalClosedDaysLoss.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between border-t border-slate-850 pt-1.5 font-bold">
-                  <span>নেট লাভ পরিমাপ:</span> <span className={`${activeMonthReport.netProfit >= 0 ? 'text-emerald-450' : 'text-rose-455'} font-bold`}>৳{activeMonthReport.netProfit.toLocaleString()}</span>
+                  <span>মোট লাভ:</span> <span className={`${activeMonthReport.totalProfit >= 0 ? 'text-emerald-450' : 'text-rose-455'} font-bold`}>৳{activeMonthReport.totalProfit.toLocaleString()}</span>
                 </div>
               </div>
 
               <div className="text-center text-[9px] text-slate-650 mt-4 pt-1.5 border-t border-slate-900/60">
-                জেনারেটর ইউজার: {currentUser.name} • তারিখ: {formatBanglaDate(getTodayStr())}
+                প্রস্তুতকারক: প্রাইম নেটওয়ার্ক • তারিখ: {formatBanglaDate(getTodayStr())}
               </div>
             </div>
 

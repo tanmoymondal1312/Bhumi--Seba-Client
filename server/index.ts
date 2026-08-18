@@ -14,6 +14,10 @@ import servicesRoutes from './routes/services';
 import backupRoutes from './routes/backup';
 import usersRoutes from './routes/users';
 import memosRoutes from './routes/memos';
+import categoriesRoutes from './routes/categories';
+import salaryRoutes from './routes/salary';
+import duesRoutes from './routes/dues';
+import financialsRoutes from './routes/financials';
 
 dotenv.config();
 
@@ -34,6 +38,16 @@ app.use('/api/services', servicesRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/memos', memosRoutes);
+app.use('/api/categories', categoriesRoutes);
+app.use('/api/salary', salaryRoutes);
+app.use('/api/dues', duesRoutes);
+app.use('/api/financials', financialsRoutes);
+
+// JSON 404 for unknown API paths (all methods) — without this, unknown GET /api/*
+// fell through to the static catch-all below and hung with no response.
+app.use('/api', (req, res) => {
+  res.status(404).json({ message: 'রিকোয়েস্ট করা এন্ডপয়েন্ট পাওয়া যায়নি।' });
+});
 
 // Serve static frontend files in production
 const distPath = path.join(process.cwd(), 'dist');

@@ -1,3 +1,5 @@
+import { SalarySnapshot, SalaryPayment } from '../types';
+
 const API_BASE = '/api';
 
 function getToken(): string | null {
@@ -50,18 +52,35 @@ export const api = {
 
   users: {
     getAll: () => request<any[]>('/users'),
-    create: (data: { name: string; role: string; pin: string; phone?: string; avatar?: string }) =>
+    create: (data: { name: string; role: string; pin: string; phone?: string; avatar?: string; monthlySalary?: number | null }) =>
       request('/users', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    update: (id: string, data: { name?: string; role?: string; pin?: string; phone?: string; avatar?: string }) =>
+    update: (id: string, data: { name?: string; role?: string; pin?: string; phone?: string; avatar?: string; monthlySalary?: number | null }) =>
       request(`/users/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
     delete: (id: string) =>
       request(`/users/${id}`, { method: 'DELETE' }),
+  },
+
+  salary: {
+    getForPeriod: (period: string) =>
+      request<SalarySnapshot>(`/salary?period=${encodeURIComponent(period)}`),
+    setSalary: (employeeId: string, period: string, monthlySalary: number) =>
+      request<{ employeeId: string; name: string; period: string; monthlySalary: number }>(`/salary/${employeeId}/${period}`, {
+        method: 'PUT',
+        body: JSON.stringify({ monthlySalary }),
+      }),
+    addPayment: (data: { employeeId: string; amount: number; method: 'CASH' | 'BKASH'; date: string; note?: string }) =>
+      request<{ payment: SalaryPayment; remaining: number }>('/salary/payment', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    deletePayment: (id: string) =>
+      request(`/salary/payment/${id}`, { method: 'DELETE' }),
   },
 
   income: {

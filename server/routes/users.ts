@@ -17,7 +17,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!requireOwner(req, res)) return;
   try {
     const [rows] = await pool.execute(
-      'SELECT id, name, role, avatar, phone, created_at FROM users ORDER BY FIELD(role, "OWNER_ONE", "OWNER_TWO", "STAFF"), created_at'
+      'SELECT id, name, role, avatar, phone, monthly_salary, created_at FROM users ORDER BY FIELD(role, "OWNER_ONE", "OWNER_TWO", "STAFF"), created_at'
     );
     res.json(rows);
   } catch (err) {
@@ -29,7 +29,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   if (!requireOwner(req, res)) return;
   try {
-    const { name, role, pin, phone, avatar } = req.body;
+    const { name, role, pin, phone, avatar, monthlySalary } = req.body;
 
     if (!name || !pin || !role) {
       res.status(400).json({ message: 'নাম, পিন এবং ভূমিকা আবশ্যক।' });
@@ -41,12 +41,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       return;
     }
 
+    if (monthlySalary !== undefined && monthlySalary !== null) {
+      const salaryNum = Number(monthlySalary);
+      if (isNaN(salaryNum) || salaryNum < 0) {
+        res.status(400).json({ message: 'মাসিক বেতন অবশ্যই 0 বা তার বেশি হতে হবে।' });
+        return;
+      }
+    }
+
     const userId = `user-${Date.now()}`;
     const hashedPin = await bcrypt.hash(pin, 10);
 
     await pool.execute(
-      'INSERT INTO users (id, name, role, pin, avatar, phone) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, name, role, hashedPin, avatar || '', phone || '']
+      'INSERT INTO users (id, name, role, pin, avatar, phone, monthly_salary) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [userId, name, role, hashedPin, avatar || '', phone || '', monthlySalary !== undefined && monthlySalary !== null ? Number(monthlySalary) : null]
     );
 
     res.json({
@@ -55,6 +63,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       role,
       avatar: avatar || '',
       phone: phone || '',
+      monthlySalary: monthlySalary !== undefined && monthlySalary !== null ? Number(monthlySalary) : null,
     });
   } catch (err) {
     console.error('Create user error:', err);
@@ -72,11 +81,19 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const { name, role, pin, phone, avatar } = req.body;
+    const { name, role, pin, phone, avatar, monthlySalary } = req.body;
 
     if (role && !['OWNER_TWO', 'STAFF'].includes(role)) {
       res.status(400).json({ message: 'ভূমিকা OWNER_TWO অথবা STAFF হতে হবে।' });
       return;
+    }
+
+    if (monthlySalary !== undefined && monthlySalary !== null) {
+      const salaryNum = Number(monthlySalary);
+      if (isNaN(salaryNum) || salaryNum < 0) {
+        res.status(400).json({ message: 'মাসিক বেতন অবশ্যই 0 বা তার বেশি হতে হবে।' });
+        return;
+      }
     }
 
     const updates: string[] = [];
@@ -91,6 +108,10 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     }
     if (phone !== undefined) { updates.push('phone = ?'); values.push(phone); }
     if (avatar !== undefined) { updates.push('avatar = ?'); values.push(avatar); }
+    if (monthlySalary !== undefined && monthlySalary !== null) {
+      updates.push('monthly_salary = ?');
+      values.push(Number(monthlySalary));
+    }
 
     if (updates.length === 0) {
       res.status(400).json({ message: 'কোনো পরিবর্তন দেওয়া হয়নি।' });
@@ -104,7 +125,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
       await pool.execute('DELETE FROM sessions WHERE user_id = ?', [id]);
     }
 
-    const [rows] = await pool.execute('SELECT id, name, role, avatar, phone FROM users WHERE id = ?', [id]);
+    const [rows] = await pool.execute('SELECT id, name, role, avatar, phone, monthly_salary FROM users WHERE id = ?', [id]);
     const user = (rows as any[])[0];
     if (!user) {
       res.status(404).json({ message: 'ব্যবহারকারী পাওয়া যায়নি।' });

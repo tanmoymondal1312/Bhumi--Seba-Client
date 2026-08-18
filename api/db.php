@@ -29,9 +29,11 @@ function getDB(): PDO {
         createTables($pdo);
         seedIfEmpty($pdo);
     } catch (Exception $e) {
+        // Phase 6 hardening: never leak PDO/SQL details to the client.
+        error_log('DB init error: ' . $e->getMessage());
         http_response_code(503);
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['message' => 'ডেটাবেস সমস্যা: ' . $e->getMessage()], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['message' => 'ডেটাবেস সমস্যা হয়েছে। পরে আবার চেষ্টা করুন।'], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -210,6 +212,11 @@ function seedIfEmpty(PDO $pdo): void {
             ['TRAVEL',      'যাতায়াত খরচ',          'Travel & Courier',     'bg-purple-500',  0, 6],
             ['PRINT',       'প্রিন্ট/ফটোকপি পেপার', 'Paper & Stationery',   'bg-emerald-500', 0, 7],
             ['OTHERS',      'অন্যান্য খরচ',          'Miscellaneous',        'bg-slate-500',   0, 8],
+            ['COURT_FEE',   'কোর্ট ফি ক্রয়',        'Court Fee & Purchase', 'bg-rose-500',    0, 9],
+            ['A4_PAPER',    'এফোর কাগজ ক্রয়',       'A4 Paper',             'bg-lime-500',    0, 10],
+            ['LEGAL_PAPER', 'লিগ্যাল কাগজ ক্রয়',    'Legal Paper',          'bg-teal-500',    0, 11],
+            ['COLOR_PAPER', 'রঙিন কাগজ ক্রয়',       'Color Paper',          'bg-fuchsia-500', 0, 12],
+            ['STAMP',       'স্ট্যাম্প ক্রয়',        'Stamp',                'bg-sky-500',     0, 13],
         ];
         $stmt = $pdo->prepare(
             'INSERT INTO expense_categories (category_key, bangla, english, color, is_fixed, sort_order, is_active)

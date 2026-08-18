@@ -6,21 +6,21 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, IncomeRecord, ServiceType, DueRecord } from '../types';
 import { SERVICE_METADATA } from '../data/mockData';
-import { getDailyIncomeMetrics, getTodayStr, formatBanglaDate } from '../utils/finance';
+import { getDailyIncomeMetrics, getTodayStr, formatBanglaDate, getCurrentAccountingPeriod, getAccountingPeriodForDate, getAccountingPeriodRange } from '../utils/finance';
 import { Calendar, Clock, DollarSign, FileText, Search, CreditCard, CheckCircle, Trash2, PlusCircle, Edit, BookOpen, HandCoins, UserRound, Check } from 'lucide-react';
 
 interface IncomeManagerProps {
   incomeList: IncomeRecord[];
   currentUser: User;
-  onAddIncome: (record: Omit<IncomeRecord, 'id'>) => void;
+  onAddIncome: (record: Omit<IncomeRecord, 'id'>) => void | Promise<{ success: boolean; message?: string }>;
   onDeleteIncome?: (id: string) => void;
   onUpdateIncome?: (id: string, updatedFields: Partial<IncomeRecord>) => void;
   activeServiceTypes: ServiceType[];
   onUpdateServiceTypes: (types: ServiceType[]) => void;
   servicesMetadata: Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>;
   duesList?: DueRecord[];
-  onAddDue?: (record: Omit<DueRecord, 'id'>) => void;
-  onPayDue?: (id: string, paymentMethod?: 'CASH' | 'BKASH') => void;
+  onAddDue?: (record: Omit<DueRecord, 'id'>) => void | Promise<{ success: boolean; message?: string }>;
+  onPayDue?: (id: string, paymentMethod?: 'CASH' | 'BKASH') => void | Promise<{ success: boolean; message?: string }>;
   onDeleteDue?: (id: string) => void;
 }
 
@@ -66,6 +66,14 @@ export default function IncomeManager({
   const [showServiceManagement, setShowServiceManagement] = useState<boolean>(false);
   const [recordToDelete, setRecordToDelete] = useState<IncomeRecord | null>(null);
 
+  // Phase 5: double-submission protection + server error surfacing
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string>('');
+  const [isAddingDue, setIsAddingDue] = useState<boolean>(false);
+  const [dueError, setDueError] = useState<string>('');
+  const [isPayingDue, setIsPayingDue] = useState<boolean>(false);
+  const [payDueError, setPayDueError] = useState<string>('');
+
   // States for general listing item edits (modal based)
   const [editingRecord, setEditingRecord] = useState<IncomeRecord | null>(null);
   const [editAmount, setEditAmount] = useState<string>('');
@@ -100,6 +108,22 @@ export default function IncomeManager({
   // Filters state definitions
   const [filterService, setFilterService] = useState<string>('ALL');
   const [filterSearch, setFilterSearch] = useState<string>('');
+  // ভূমি সেবা আয়ের রেজিস্টার বুক: হিসাব চক্র অনুযায়ী ফিল্টার।
+  // বর্তমান চক্র ডিফল্ট — ৩ তারিখে নতুন চক্র শুরু হলে রেজিস্টার খালি দেখায়।
+  const currentPeriod = getCurrentAccountingPeriod();
+  const [registerPeriod, setRegisterPeriod] = useState<string>(currentPeriod);
+
+  // Available accounting periods present in the income records (newest first)
+  const availablePeriods = useMemo(() => {
+    const set = new Set<string>();
+    incomeList.forEach(item => {
+      if (item.date && item.date.length >= 10) {
+        set.add(getAccountingPeriodForDate(item.date));
+      }
+    });
+    set.add(currentPeriod);
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [incomeList, currentPeriod]);
 
   const getDisplayName = (name: string) => {
     if (currentUser.role === 'STAFF') {
@@ -191,8 +215,10 @@ export default function IncomeManager({
     setShowResetConfirm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setSubmitError('');
     const cleanAmount = parseFloat(amount);
     if (isNaN(cleanAmount) || cleanAmount <= 0) {
       alert('অনুগ্রহ করে সঠিক টাকার অংক দিন।');
@@ -210,7 +236,8 @@ export default function IncomeManager({
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const timeFormatted = `${hours}:${minutes}`;
 
-    onAddIncome({
+    setIsSubmitting(true);
+    const result = await onAddIncome({
       date: dateFormatted,
       time: timeFormatted,
       serviceType,
@@ -219,6 +246,12 @@ export default function IncomeManager({
       note: note.trim() || `${servicesMetadata[serviceType]?.bangla || SERVICE_METADATA[serviceType]?.bangla || serviceType} বাবদ চার্জ`,
       paymentMethod
     });
+    setIsSubmitting(false);
+
+    if (result && !result.success) {
+      setSubmitError(result.message || 'ইনকাম সংরক্ষণ ব্যর্থ হয়েছে।');
+      return;
+    }
 
     // Reset Form & Show Nice Success Feedback
     setNote('');
@@ -231,8 +264,11 @@ export default function IncomeManager({
   // Preset quick fill amounts
   const presetAmounts = [200, 300, 500, 1000, 2000];
 
-  // Filter list with query
+  // Filter list with query — the register shows only records of the selected
+  // accounting period (default: current period) so a new month starts empty.
   const filteredList = incomeList.filter(item => {
+    const matchesPeriod = item.date && item.date.length >= 10 && getAccountingPeriodForDate(item.date) === registerPeriod;
+    if (!matchesPeriod) return false;
     const matchesService = filterService === 'ALL' || item.serviceType === filterService;
     const matchesSearch = item.note.toLowerCase().includes(filterSearch.toLowerCase()) || 
                           item.enteredBy.toLowerCase().includes(filterSearch.toLowerCase()) ||
@@ -558,10 +594,17 @@ export default function IncomeManager({
             <button
               id="btn-submit-income-entry"
               type="submit"
-              className="w-full py-2.5 text-center bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 transition cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full py-2.5 text-center bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/10 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              সার্ভিস ইনকাম ডিক্লেয়ার করুন
+              {isSubmitting ? 'সংরক্ষণ হচ্ছে...' : 'সার্ভিস ইনকাম ডিক্লেয়ার করুন'}
             </button>
+
+            {submitError && (
+              <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] rounded-xl p-2.5 font-medium">
+                {submitError}
+              </div>
+            )}
 
           </form>
         </div>
@@ -587,7 +630,7 @@ export default function IncomeManager({
           </div>
 
           {/* Interactive filter search controls */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 my-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 my-4">
             
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-500" />
@@ -615,8 +658,23 @@ export default function IncomeManager({
               ))}
             </select>
 
+            {/* Accounting period selector — register shows the selected হিসাব চক্র */}
+            <select
+              id="filter-income-period"
+              value={registerPeriod}
+              onChange={(e) => setRegisterPeriod(e.target.value)}
+              className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 px-3 text-slate-300 text-xs cursor-pointer focus:outline-none focus:border-emerald-500/60 font-medium"
+              title="হিসাব চক্র নির্বাচন করুন (মাসের ৩ তারিখে নতুন চক্র শুরু হয়)"
+            >
+              {availablePeriods.map(p => (
+                <option key={p} value={p}>
+                  হিসাব চক্র: {p} {p === currentPeriod ? '(চলমান)' : ''}
+                </option>
+              ))}
+            </select>
+
             <div className="text-[10px] text-slate-500 flex items-center justify-end font-mono">
-              {formatBanglaDate(todayStr)} তারিখের রেকর্ডসমূহ
+              চক্র {registerPeriod} • {getAccountingPeriodRange(registerPeriod).start} থেকে {getAccountingPeriodRange(registerPeriod).end} পর্যন্ত
             </div>
 
           </div>
@@ -762,14 +820,17 @@ export default function IncomeManager({
               <span className="text-slate-400 text-xs font-semibold block mb-3.5">নতুন বাকি এন্ট্রি করুন</span>
               <form
                 className="space-y-3"
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
+                  if (isAddingDue) return;
+                  setDueError('');
                   const amt = parseFloat(dueAmount);
                   if (!dueCustomer.trim() || isNaN(amt) || amt <= 0) {
                     alert('গ্রাহকের নাম ও সঠিক টাকার পরিমাণ দিন।');
                     return;
                   }
-                  onAddDue({
+                  setIsAddingDue(true);
+                  const result = await onAddDue?.({
                     customerName: dueCustomer.trim(),
                     phone: duePhone.trim(),
                     serviceType: dueServiceType,
@@ -778,6 +839,11 @@ export default function IncomeManager({
                     date: dueDate || todayStr,
                     enteredBy: currentUser.name,
                   });
+                  setIsAddingDue(false);
+                  if (result && !result.success) {
+                    setDueError(result.message || 'বাকি সংরক্ষণ ব্যর্থ হয়েছে।');
+                    return;
+                  }
                   setDueCustomer(''); setDuePhone(''); setDueAmount(''); setDueNote(''); setDueDate(todayStr);
                 }}
               >
@@ -865,11 +931,17 @@ export default function IncomeManager({
                 <button
                   id="btn-add-due"
                   type="submit"
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition flex items-center justify-center gap-1.5"
+                  disabled={isAddingDue}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl cursor-pointer transition flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <PlusCircle className="w-4 h-4" />
-                  <span>বাকির খাতায় যুক্ত করুন</span>
+                  <span>{isAddingDue ? 'সংরক্ষণ হচ্ছে...' : 'বাকির খাতায় যুক্ত করুন'}</span>
                 </button>
+                {dueError && (
+                  <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] rounded-xl p-2.5 font-medium">
+                    {dueError}
+                  </div>
+                )}
               </form>
             </div>
 
@@ -942,7 +1014,7 @@ export default function IncomeManager({
       <div id="due-pay-confirm-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div
           className="absolute inset-0 bg-slate-950/85 backdrop-blur-sm"
-          onClick={() => setDueToPay(null)}
+          onClick={() => { if (!isPayingDue) setDueToPay(null); }}
         ></div>
 
         <div className="relative bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full mx-auto shadow-2xl animate-in zoom-in duration-200">
@@ -958,25 +1030,41 @@ export default function IncomeManager({
               নিশ্চিত করলে বাকিটি তালিকা থেকে মুছে গিয়ে <strong className="text-emerald-400">আজকের তারিখে ইনকামে যুক্ত হবে</strong>।
             </p>
 
+            {payDueError && (
+              <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] rounded-xl p-2.5 font-medium mb-4">
+                {payDueError}
+              </div>
+            )}
+
             <div className="flex gap-3 justify-center">
               <button
                 type="button"
-                onClick={() => setDueToPay(null)}
-                className="flex-1 py-2 px-4 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer"
+                onClick={() => { if (!isPayingDue) setDueToPay(null); }}
+                disabled={isPayingDue}
+                className="flex-1 py-2 px-4 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 বাতিল
               </button>
               <button
                 type="button"
                 id="btn-confirm-pay-due"
-                onClick={() => {
-                  onPayDue(dueToPay.id, 'CASH');
+                disabled={isPayingDue}
+                onClick={async () => {
+                  if (isPayingDue) return;
+                  setPayDueError('');
+                  setIsPayingDue(true);
+                  const result = await onPayDue(dueToPay.id, 'CASH');
+                  setIsPayingDue(false);
+                  if (result && !result.success) {
+                    setPayDueError(result.message || 'পরিশোধ প্রক্রিয়া ব্যর্থ হয়েছে।');
+                    return;
+                  }
                   setDueToPay(null);
                 }}
-                className="flex-1 py-2 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1"
+                className="flex-1 py-2 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black rounded-xl transition cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check className="w-3.5 h-3.5" />
-                হ্যাঁ, পরিশোধ হয়েছে
+                {isPayingDue ? 'পরিশোধ হচ্ছে...' : 'হ্যাঁ, পরিশোধ হয়েছে'}
               </button>
             </div>
           </div>

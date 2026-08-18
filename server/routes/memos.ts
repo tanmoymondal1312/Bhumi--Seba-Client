@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import pool from '../db';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { isValidDate, isValidTime } from '../validation';
 
 const router = Router();
 
@@ -26,6 +27,19 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     const { title, description, amount, image, enteredBy, date, time } = req.body;
     if (!title) {
       res.status(400).json({ message: 'মেমো শিরোনাম আবশ্যক।' });
+      return;
+    }
+    // Phase 6 hardening: memo amounts and dates must be sane.
+    if (amount !== undefined && amount !== null && (isNaN(Number(amount)) || Number(amount) < 0)) {
+      res.status(400).json({ message: 'মেমোর টাকার পরিমাণ সঠিক নয়।' });
+      return;
+    }
+    if (date && !isValidDate(date)) {
+      res.status(400).json({ message: 'তারিখ সঠিক নয়।' });
+      return;
+    }
+    if (time && !isValidTime(time)) {
+      res.status(400).json({ message: 'সময় সঠিক নয়।' });
       return;
     }
     const id = `memo-${Date.now()}`;

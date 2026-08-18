@@ -12,6 +12,44 @@ export interface User {
   pin: string;
   avatar: string;
   phone?: string;
+  monthlySalary?: number | null;
+}
+
+export interface SalaryEmployee {
+  employeeId: string;
+  name: string;
+  role: string;
+  monthlySalary: number;
+  hasObligation: boolean;
+  paid: number;
+  remaining: number;
+  overPaid: number;
+  status: 'NO_OBLIGATION' | 'UNPAID' | 'PARTIAL' | 'PAID';
+}
+
+export interface SalaryPayment {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  period: string;
+  amount: number;
+  method: 'CASH' | 'BKASH';
+  date: string;
+  time: string;
+  note: string;
+  enteredBy: string;
+  createdAt: string;
+}
+
+export interface SalarySnapshot {
+  period: string;
+  isCurrent: boolean;
+  active: boolean;
+  totalObligation: number;
+  totalPaid: number;
+  totalRemaining: number;
+  employees: SalaryEmployee[];
+  payments: SalaryPayment[];
 }
 
 export type ServiceType = string;

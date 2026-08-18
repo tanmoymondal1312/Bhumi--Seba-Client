@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, SystemSettings, ServiceType, DueRecord, ExpenseCategoryMeta } from './types';
-import { getTodayStr, formatBanglaDate } from './utils/finance';
+import { User, IncomeRecord, ExpenseRecord, BKashRecord, QuickReminder, SystemSettings, ServiceType, DueRecord, ExpenseCategoryMeta, SalarySnapshot } from './types';
+import { getTodayStr, formatBanglaDate, getCurrentAccountingPeriod } from './utils/finance';
 import { api } from './api/client';
 
 // Component Imports
@@ -16,12 +16,13 @@ import ExpenseManager from './components/ExpenseManager';
 import BKashManager from './components/bKashManager';
 import ReportsManager from './components/ReportsManager';
 import SettingsManager from './components/SettingsManager';
+import SalaryManager from './components/SalaryManager';
 
 // Lucide icon imports
 import {
   FolderLock, LayoutDashboard, Landmark, Coins,
   CreditCard, TrendingUp, Settings, LogOut, CheckCircle,
-  HelpCircle, ShieldCheck, Sun, Moon, CalendarDays, Globe, UserCheck, Camera
+  HelpCircle, ShieldCheck, Sun, Moon, CalendarDays, Globe, UserCheck, Camera, Wallet
 } from 'lucide-react';
 
 export default function App() {
@@ -41,7 +42,12 @@ export default function App() {
     OFFICE: { bangla: 'অফিস খরচ/চা-নাস্তা', english: 'Office Tea & Snacks', color: 'bg-amber-500', isFixed: false },
     TRAVEL: { bangla: 'যাতায়াত খরচ', english: 'Travel & Courier', color: 'bg-purple-500', isFixed: false },
     PRINT: { bangla: 'প্রিন্ট/ফটোকপি পেপার', english: 'Paper & Stationery', color: 'bg-emerald-500', isFixed: false },
-    OTHERS: { bangla: 'অন্যান্য খরচ', english: 'Miscellaneous', color: 'bg-slate-500', isFixed: false }
+    OTHERS: { bangla: 'অন্যান্য খরচ', english: 'Miscellaneous', color: 'bg-slate-500', isFixed: false },
+    COURT_FEE: { bangla: 'কোর্ট ফি ক্রয়', english: 'Court Fee & Purchase', color: 'bg-rose-500', isFixed: false },
+    A4_PAPER: { bangla: 'এফোর কাগজ ক্রয়', english: 'A4 Paper', color: 'bg-lime-500', isFixed: false },
+    LEGAL_PAPER: { bangla: 'লিগ্যাল কাগজ ক্রয়', english: 'Legal Paper', color: 'bg-teal-500', isFixed: false },
+    COLOR_PAPER: { bangla: 'রঙিন কাগজ ক্রয়', english: 'Color Paper', color: 'bg-fuchsia-500', isFixed: false },
+    STAMP: { bangla: 'স্ট্যাম্প ক্রয়', english: 'Stamp', color: 'bg-sky-500', isFixed: false }
   });
   const [settings, setSettings] = useState<SystemSettings>({
     isDarkMode: true,
@@ -55,6 +61,7 @@ export default function App() {
   });
   const [activeServiceTypes, setActiveServiceTypes] = useState<ServiceType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [salaryData, setSalaryData] = useState<SalarySnapshot | null>(null);
 
   // Services metadata state
   const [servicesMetadata, setServicesMetadata] = useState<Record<string, { bangla: string; english: string; color: string; defaultPrice: number }>>({
@@ -102,7 +109,7 @@ export default function App() {
   // 2. LOAD ALL DATA FROM API AFTER LOGIN
   async function loadAllData() {
     try {
-      const [incomeData, expenseData, bkashData, reminderData, settingsData, servicesData, duesData, categoriesData] = await Promise.all([
+      const results = await Promise.allSettled([
         api.income.getAll(),
         api.expenses.getAll(),
         api.bkash.getAll(),
@@ -111,7 +118,21 @@ export default function App() {
         api.services.getAll(),
         api.dues.getAll(),
         api.categories.getAll(),
+        api.salary.getForPeriod(getCurrentAccountingPeriod()),
       ]);
+      const settled = (i: number) => (results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<any>).value : []);
+
+      const [incomeData, expenseData, bkashData, reminderData, settingsData, servicesData, duesData, categoriesData, salaryData] = [
+        settled(0), settled(1), settled(2), settled(3), settled(4), settled(5), settled(6), settled(7), settled(8),
+      ];
+
+      results.forEach((r, i) => {
+        if (r.status === 'rejected') console.error(`Load ${['income','expense','bkash','reminder','settings','service','due','category','salary'][i]} data error:`, r.reason);
+      });
+
+      if (salaryData && salaryData.period) {
+        setSalaryData(salaryData);
+      }
 
       setIncomeList(incomeData.map((r: any) => ({ ...r, amount: Number(r.amount) })));
       setExpenseList(expenseData.map((r: any) => ({ ...r, amount: Number(r.amount) })));
@@ -247,7 +268,7 @@ export default function App() {
   };
 
   // ADD NEW INCOME RECORD
-  const handleAddIncome = async (record: Omit<IncomeRecord, 'id'>) => {
+  const handleAddIncome = async (record: Omit<IncomeRecord, 'id'>): Promise<{ success: boolean; message?: string }> => {
     try {
       const result = await api.income.create(record);
       const newRecord: IncomeRecord = { ...result.income, amount: Number(result.income.amount) };
@@ -257,8 +278,10 @@ export default function App() {
         const bkRecord: BKashRecord = { ...result.bkash, amount: Number(result.bkash.amount), fee: result.bkash.fee != null ? Number(result.bkash.fee) : undefined };
         setBkashList(prev => [bkRecord, ...prev]);
       }
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.error('Add income error:', err);
+      return { success: false, message: err?.message || 'ইনকাম সংরক্ষণ ব্যর্থ হয়েছে।' };
     }
   };
 
@@ -273,22 +296,26 @@ export default function App() {
   };
 
   // UPDATE INCOME RECORD
-  const handleUpdateIncome = async (id: string, updatedFields: Partial<IncomeRecord>) => {
+  const handleUpdateIncome = async (id: string, updatedFields: Partial<IncomeRecord>): Promise<{ success: boolean; message?: string }> => {
     try {
       await api.income.update(id, updatedFields);
       setIncomeList(prev => prev.map(item => item.id === id ? { ...item, ...updatedFields } : item));
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.error('Update income error:', err);
+      return { success: false, message: err?.message || 'আপডেট ব্যর্থ হয়েছে।' };
     }
   };
 
   // ADD NEW EXPENSE RECORD
-  const handleAddExpense = async (record: Omit<ExpenseRecord, 'id'>) => {
+  const handleAddExpense = async (record: Omit<ExpenseRecord, 'id'>): Promise<{ success: boolean; message?: string }> => {
     try {
       const newRecord = await api.expenses.create(record);
       setExpenseList(prev => [{ ...newRecord, amount: Number(newRecord.amount) }, ...prev]);
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.error('Add expense error:', err);
+      return { success: false, message: err?.message || 'খরচ সংরক্ষণ ব্যর্থ হয়েছে।' };
     }
   };
 
@@ -303,17 +330,19 @@ export default function App() {
   };
 
   // ADD NEW DUE (বাকি) ENTRY
-  const handleAddDue = async (record: Omit<DueRecord, 'id'>) => {
+  const handleAddDue = async (record: Omit<DueRecord, 'id'>): Promise<{ success: boolean; message?: string }> => {
     try {
       const newDue = await api.dues.create(record);
       setDuesList(prev => [{ ...newDue, amount: Number(newDue.amount) }, ...prev]);
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.error('Add due error:', err);
+      return { success: false, message: err?.message || 'বাকি সংরক্ষণ ব্যর্থ হয়েছে।' };
     }
   };
 
   // DUE PAID → delete due + auto income entry on the payment date
-  const handlePayDue = async (id: string, paymentMethod: 'CASH' | 'BKASH' = 'CASH') => {
+  const handlePayDue = async (id: string, paymentMethod: 'CASH' | 'BKASH' = 'CASH'): Promise<{ success: boolean; message?: string }> => {
     try {
       const now = new Date();
       const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -326,8 +355,10 @@ export default function App() {
       setDuesList(prev => prev.filter(item => item.id !== id));
       const newRecord: IncomeRecord = { ...result.income, amount: Number(result.income.amount) };
       setIncomeList(prev => [newRecord, ...prev]);
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.error('Pay due error:', err);
+      return { success: false, message: err?.message || 'পরিশোধ প্রক্রিয়া ব্যর্থ হয়েছে।' };
     }
   };
 
@@ -372,12 +403,14 @@ export default function App() {
   };
 
   // ADD NEW BKASH RECORD MANUALLY
-  const handleAddBkashRecord = async (record: Omit<BKashRecord, 'id'>) => {
+  const handleAddBkashRecord = async (record: Omit<BKashRecord, 'id'>): Promise<{ success: boolean; message?: string }> => {
     try {
       const newRecord = await api.bkash.create(record);
       setBkashList(prev => [{ ...newRecord, amount: Number(newRecord.amount), fee: newRecord.fee != null ? Number(newRecord.fee) : undefined }, ...prev]);
-    } catch (err) {
+      return { success: true };
+    } catch (err: any) {
       console.error('Add bkash error:', err);
+      return { success: false, message: err?.message || 'বিকাশ এন্ট্রি সংরক্ষণ ব্যর্থ হয়েছে।' };
     }
   };
 
@@ -628,14 +661,15 @@ export default function App() {
               { id: 'income', label: 'সার্ভিস ইনকাম', icon: Landmark },
               { id: 'expenses', label: 'দোকান ব্যয়', icon: Coins },
               { id: 'bkash', label: 'বিকাশ ফিন্যান্স', icon: CreditCard },
+              { id: 'salary', label: 'বেতন ব্যবস্থাপনা', icon: Wallet },
               { id: 'reports', label: 'স্মার্ট রিপোর্টস', icon: TrendingUp },
               { id: 'settings', label: 'সেটিংস', icon: Settings }
             ].map(tab => {
               const IconComp = tab.icon;
               const isAct = activeTab === tab.id;
 
-              // Hide reports tab for staff
-              if (tab.id === 'reports' && currentUser.role === 'STAFF') {
+              // Hide reports and salary tabs for staff
+              if ((tab.id === 'reports' || tab.id === 'salary') && currentUser.role === 'STAFF') {
                 return null;
               }
 
@@ -672,10 +706,13 @@ export default function App() {
               onAddReminder={handleAddReminder}
               onDeleteReminder={handleDeleteReminder}
               onAddIncome={handleAddIncome}
+              onUpdateIncome={handleUpdateIncome}
               activeServiceTypes={activeServiceTypes}
               settings={settings}
               servicesMetadata={servicesMetadata}
               onUpdateSettings={updateSettingsState}
+              expenseCategories={expenseCategories}
+              salaryData={salaryData}
             />
           )}
 
@@ -727,6 +764,17 @@ export default function App() {
               currentUser={currentUser}
               servicesMetadata={servicesMetadata}
               duesList={duesList}
+              settings={settings}
+              expenseCategories={expenseCategories}
+            />
+          )}
+
+          {activeTab === 'salary' && currentUser.role !== 'STAFF' && (
+            <SalaryManager
+              currentUser={currentUser}
+              onSalaryUpdated={(snapshot) => {
+              if (snapshot.period === getCurrentAccountingPeriod()) setSalaryData(snapshot);
+            }}
             />
           )}
 
@@ -762,10 +810,16 @@ export default function App() {
             { id: 'income', label: 'আয়', icon: Landmark },
             { id: 'expenses', label: 'ব্যয়', icon: Coins },
             { id: 'bkash', label: 'বিকাশ', icon: CreditCard },
+            { id: 'salary', label: 'বেতন', icon: Wallet },
             { id: 'settings', label: 'সেটিংস', icon: Settings }
           ].map(tab => {
             const Icon = tab.icon;
             const isAct = activeTab === tab.id;
+
+            // Hide salary tab for staff
+            if (tab.id === 'salary' && currentUser.role === 'STAFF') {
+              return null;
+            }
             return (
               <button
                 key={tab.id}

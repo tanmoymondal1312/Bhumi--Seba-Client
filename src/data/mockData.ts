@@ -23,7 +23,12 @@ export const EXPENSE_METADATA: Record<ExpenseCategory, { bangla: string; english
   OFFICE: { bangla: 'অফিস খরচ/চা-নাস্তা', english: 'Office Tea & Snacks', color: 'bg-amber-500', isFixed: false },
   TRAVEL: { bangla: 'যাতায়াত খরচ', english: 'Travel & Courier', color: 'bg-purple-500', isFixed: false },
   PRINT: { bangla: 'প্রিন্ট/ফটোকপি পেপার', english: 'Paper & Stationery', color: 'bg-emerald-500', isFixed: false },
-  OTHERS: { bangla: 'অন্যান্য খরচ', english: 'Miscellaneous Expenses', color: 'bg-slate-500', isFixed: false }
+  OTHERS: { bangla: 'অন্যান্য খরচ', english: 'Miscellaneous Expenses', color: 'bg-slate-500', isFixed: false },
+  COURT_FEE: { bangla: 'কোর্ট ফি ক্রয়', english: 'Court Fee & Purchase', color: 'bg-rose-500', isFixed: false },
+  A4_PAPER: { bangla: 'এফোর কাগজ ক্রয়', english: 'A4 Paper', color: 'bg-lime-500', isFixed: false },
+  LEGAL_PAPER: { bangla: 'লিগ্যাল কাগজ ক্রয়', english: 'Legal Paper', color: 'bg-teal-500', isFixed: false },
+  COLOR_PAPER: { bangla: 'রঙিন কাগজ ক্রয়', english: 'Color Paper', color: 'bg-fuchsia-500', isFixed: false },
+  STAMP: { bangla: 'স্ট্যাম্প ক্রয়', english: 'Stamp', color: 'bg-sky-500', isFixed: false }
 };
 
 export const ROLE_METADATA: Record<string, { bangla: string; roleTheme: string }> = {

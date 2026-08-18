@@ -13,6 +13,11 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
     const [settings] = await pool.execute('SELECT * FROM settings WHERE id = 1');
     const [services] = await pool.execute('SELECT * FROM services_metadata ORDER BY sort_order');
     const [memos] = await pool.execute('SELECT * FROM memos ORDER BY date DESC, time DESC');
+    const [categories] = await pool.execute('SELECT * FROM expense_categories ORDER BY sort_order');
+    const [salaries] = await pool.execute('SELECT * FROM employee_salaries ORDER BY period');
+    const [payments] = await pool.execute('SELECT * FROM salary_payments ORDER BY date DESC, time DESC');
+    const [dues] = await pool.execute('SELECT * FROM dues ORDER BY date DESC, created_at DESC');
+    const [users] = await pool.execute('SELECT id, name, role, phone, monthly_salary, created_at FROM users ORDER BY created_at');
 
     const incomeList = (income as any[]).map(r => ({
       id: r.id, date: r.date, time: r.time,
@@ -62,6 +67,58 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
       isActive: !!r.is_active,
     }));
 
+    // Phase 5: expense categories, salary obligations/payments, dues and user
+    // salary settings are part of the backup now — restoring an export would
+    // otherwise lose everything Phase 2/4 added.
+    const expenseCategories = (categories as any[]).map(r => ({
+      categoryKey: r.category_key,
+      bangla: r.bangla,
+      english: r.english || '',
+      color: r.color || '',
+      isFixed: !!r.is_fixed,
+      sortOrder: r.sort_order,
+      isActive: !!r.is_active,
+    }));
+
+    const salaryObligations = (salaries as any[]).map(r => ({
+      employeeId: r.employee_id,
+      period: r.period,
+      monthlySalary: Number(r.monthly_salary),
+    }));
+
+    const salaryPayments = (payments as any[]).map(r => ({
+      id: r.id,
+      employeeId: r.employee_id,
+      employeeName: r.employee_name,
+      period: r.period,
+      amount: Number(r.amount),
+      method: r.method,
+      date: r.date,
+      time: r.time,
+      note: r.note || '',
+      enteredBy: r.entered_by,
+      createdAt: r.created_at,
+    }));
+
+    const duesList = (dues as any[]).map(r => ({
+      id: r.id,
+      customerName: r.customer_name,
+      phone: r.phone || '',
+      serviceType: r.service_type || 'OTHERS',
+      amount: Number(r.amount),
+      note: r.note || '',
+      date: r.date,
+      enteredBy: r.entered_by,
+    }));
+
+    const usersList = (users as any[]).map(r => ({
+      id: r.id,
+      name: r.name,
+      role: r.role,
+      phone: r.phone || '',
+      monthlySalary: r.monthly_salary != null ? Number(r.monthly_salary) : null,
+    }));
+
     res.json({
       exportDate: new Date().toISOString(),
       incomeList,
@@ -75,6 +132,11 @@ router.get('/export', authMiddleware, async (req: AuthRequest, res: Response) =>
         amount: Number(r.amount), image: r.image ? '[base64]' : '',
         enteredBy: r.entered_by, date: r.date, time: r.time,
       })),
+      expenseCategories,
+      salaryObligations,
+      salaryPayments,
+      duesList,
+      usersList,
     });
   } catch (err) {
     console.error('Export error:', err);
@@ -97,6 +159,10 @@ router.post('/reset', authMiddleware, async (req: AuthRequest, res: Response) =>
     await pool.execute('DELETE FROM memos');
     await pool.execute('DELETE FROM settings');
     await pool.execute('DELETE FROM services_metadata');
+    await pool.execute('DELETE FROM expense_categories');
+    await pool.execute('DELETE FROM salary_payments');
+    await pool.execute('DELETE FROM employee_salaries');
+    await pool.execute('DELETE FROM dues');
     await pool.execute('DELETE FROM users');
 
     const { initializeDatabase } = await import('../db');

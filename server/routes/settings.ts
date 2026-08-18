@@ -49,6 +49,29 @@ router.put('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const data = req.body;
 
+    // Phase 6 hardening: guard the numeric settings so direct API calls cannot
+    // write strings/negatives into DECIMAL columns (the UI already limits these).
+    const numericKeys: Array<keyof typeof data> = [
+      'expenseAlertThreshold', 'monthlyRent', 'monthlyElectricity',
+      'monthlyInternet', 'monthlySalary', 'bkashBaseBalance',
+      'bkashTodaySpentOverride', 'cashInHandOverride'
+    ];
+    for (const key of numericKeys) {
+      if (data[key] !== undefined) {
+        const num = Number(data[key]);
+        if (isNaN(num) || num < 0) {
+          res.status(400).json({ message: 'সেটিংসের টাকার মান সঠিক নয় (0 বা তার বেশি হতে হবে)।' });
+          return;
+        }
+      }
+    }
+    for (const key of ['isDarkMode', 'pinLockEnabled'] as const) {
+      if (data[key] !== undefined && typeof data[key] !== 'boolean') {
+        res.status(400).json({ message: 'বুলিয়ান সেটিংস সঠিক নয়।' });
+        return;
+      }
+    }
+
     const updates: string[] = [];
     const values: any[] = [];
 

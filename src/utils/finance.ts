@@ -4,6 +4,21 @@
  */
 
 import { IncomeRecord } from '../types';
+import {
+  getAccountingPeriodForDate,
+  getCurrentAccountingPeriod,
+  getAccountingPeriodRange,
+  isInAccountingPeriod,
+  getTodayStr,
+} from './accountingPeriod';
+
+export {
+  getAccountingPeriodForDate,
+  getCurrentAccountingPeriod,
+  getAccountingPeriodRange,
+  isInAccountingPeriod,
+  getTodayStr,
+};
 
 /**
  * Calculates metrics for a single date.
@@ -46,14 +61,6 @@ export function getIncomeSum(list: IncomeRecord[]) {
   });
 
   return { total, cash, bkash };
-}
-
-export function getTodayStr(): string {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 export function getYesterdayStr(): string {

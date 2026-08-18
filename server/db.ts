@@ -44,6 +44,36 @@ export async function initializeDatabase() {
     await pool.execute('ALTER TABLE users MODIFY COLUMN avatar MEDIUMTEXT');
   } catch {}
 
+  // Idempotent migration (Phase 4): monthly salary default per employee.
+  try {
+    await pool.execute('ALTER TABLE users ADD COLUMN monthly_salary DECIMAL(12,2) DEFAULT NULL');
+  } catch (e: any) {
+    if (!/Duplicate column/i.test(e?.message || '')) {
+      console.warn('users.monthly_salary migration skipped:', e?.message || e);
+    }
+  }
+
+  // Idempotent migration (Phase 4): set default salary for employees created
+  // before the monthly_salary column existed (they stay editable via settings).
+  try {
+    await pool.execute(
+      "UPDATE users SET monthly_salary = 8000 WHERE monthly_salary IS NULL AND role = 'STAFF'"
+    );
+  } catch (e: any) {
+    console.warn('Staff salary default migration skipped:', e?.message || e);
+  }
+
+  // Idempotent migration: extend expense_records.category ENUM with Phase 2
+  // variable expense categories. Existing values are appended at the end so
+  // historical records keep their stored ENUM index.
+  try {
+    await pool.execute(
+      "ALTER TABLE expense_records MODIFY COLUMN category ENUM('RENT', 'ELECTRICITY', 'INTERNET', 'SALARY', 'OFFICE', 'TRAVEL', 'PRINT', 'OTHERS', 'COURT_FEE', 'A4_PAPER', 'LEGAL_PAPER', 'COLOR_PAPER', 'STAMP') NOT NULL"
+    );
+  } catch (e: any) {
+    console.warn('Expense category ENUM migration skipped:', e?.message || e);
+  }
+
   const [users] = await pool.execute('SELECT COUNT(*) as count FROM users');
   if ((users as any)[0].count === 0) {
     await seedDatabase();
@@ -53,6 +83,13 @@ export async function initializeDatabase() {
 }
 
 async function syncPrimaryOwner() {
+  // Phase 6 hardening: only rewrite the owner credentials from .env when
+  // OWNER_PIN is explicitly provided. If .env is lost/renamed at runtime,
+  // the owner's existing PIN stays intact instead of silently resetting
+  // to the development fallback '9999'.
+  if (!process.env.OWNER_PIN) {
+    return;
+  }
   const ownerPin = process.env.OWNER_PIN || '9999';
   const ownerName = process.env.OWNER_NAME || 'মালিক';
   const ownerPhone = process.env.OWNER_PHONE || '01700-000000';

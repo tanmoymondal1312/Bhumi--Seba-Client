@@ -32,7 +32,7 @@ import {
 interface BKashManagerProps {
   bkashList: BKashRecord[];
   currentUser: User;
-  onAddBKashRecord: (record: Omit<BKashRecord, 'id'>) => void;
+  onAddBKashRecord: (record: Omit<BKashRecord, 'id'>) => void | Promise<{ success: boolean; message?: string }>;
   onDeleteBKashRecord?: (id: string) => void;
   onUpdateBKashRecord?: (record: BKashRecord) => void;
   settings: SystemSettings;
@@ -76,6 +76,10 @@ export default function BKashManager({
   // Today's Spent override states
   const [isEditingTodaySpent, setIsEditingTodaySpent] = useState<boolean>(false);
   const [newTodaySpentVal, setNewTodaySpentVal] = useState<string>('');
+
+  // Phase 5: double-submission protection + server error surfacing
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitError, setSubmitError] = useState<string>('');
 
   // Ledger item editing state
   const [editingRecord, setEditingRecord] = useState<BKashRecord | null>(null);
@@ -310,11 +314,13 @@ export default function BKashManager({
   };
 
   // Handle saving Cash Loading Entry
-  const handleAddLoad = (e: React.FormEvent) => {
+  const handleAddLoad = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setSubmitError('');
     const amt = parseAmount(loadAmount);
     if (amt <= 0) {
-      alert('দয়া করে সঠিক লোড অ্যামাউন্ট দিন।');
+      alert('দয়া করে সঠিক লোড অ্যামাউন্ট দিন।');
       return;
     }
 
@@ -322,7 +328,8 @@ export default function BKashManager({
     const dateFormatted = getTodayStr(); // Align with baseline data dynamically
     const timeFormatted = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-    onAddBKashRecord({
+    setIsSubmitting(true);
+    const result = await onAddBKashRecord({
       date: dateFormatted,
       time: timeFormatted,
       type: 'IN',
@@ -332,17 +339,25 @@ export default function BKashManager({
       refTrx: generateTrxId(),
       fee: 0
     });
+    setIsSubmitting(false);
+
+    if (result && !result.success) {
+      setSubmitError(result.message || 'বিকাশ লোড সংরক্ষণ ব্যর্থ হয়েছে।');
+      return;
+    }
 
     setLoadAmount('');
     setLoadNote('');
-    triggerAlert('বিকাশে সফলভাবে টাকা ঢুকানো সেট হয়েছে!');
+    triggerAlert('বিকাশে সফলভাবে টাকা ঢুকানো সেট হয়েছে!');
   };
 
   // Handle saving Batch Daily Expense Categories in One Click
-  const handleAddBatchExpenses = (e: React.FormEvent) => {
+  const handleAddBatchExpenses = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setSubmitError('');
     if (liveExpenseSum <= 0) {
-      alert('দয়া করে অন্তত একটি খরচের অ্যামাউন্ট দিন।');
+      alert('দয়া করে অন্তত একটি খরচের অ্যামাউন্ট দিন।');
       return;
     }
 
@@ -363,7 +378,8 @@ export default function BKashManager({
       ? `${batchNote.trim()} (${lines.join(' + ')})`
       : `সারাদিনের পেমেন্ট: ${lines.join(' + ')}`;
 
-    onAddBKashRecord({
+    setIsSubmitting(true);
+    const result = await onAddBKashRecord({
       date: dateFormatted,
       time: timeFormatted,
       type: 'PAYMENT',
@@ -373,6 +389,12 @@ export default function BKashManager({
       refTrx: generateTrxId(),
       fee: 0
     });
+    setIsSubmitting(false);
+
+    if (result && !result.success) {
+      setSubmitError(result.message || 'খরচ সংরক্ষণ ব্যর্থ হয়েছে।');
+      return;
+    }
 
     // Reset inputs
     setExpenseNamjari('');
@@ -385,8 +407,6 @@ export default function BKashManager({
 
     triggerAlert('সবগুলো সরকারি খরচ একসাথে সফলভাবে সংরক্ষণ করা হয়েছে!');
   };
-
-  // Delete wrapper
   const triggerDelete = (id: string) => {
     if (!onDeleteBKashRecord) return;
     setConfirmDialog({
@@ -708,11 +728,17 @@ export default function BKashManager({
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/15 transition cursor-pointer flex items-center justify-center space-x-1"
+                disabled={isSubmitting}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/15 transition cursor-pointer flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check className="w-4 h-4" />
-                <span>বিকাশ ব্যালেন্স লোড করুন</span>
+                <span>{isSubmitting ? 'সংরক্ষণ হচ্ছে...' : 'বিকাশ ব্যালেন্স লোড করুন'}</span>
               </button>
+              {submitError && (
+                <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] rounded-xl p-2.5 font-medium">
+                  {submitError}
+                </div>
+              )}
             </form>
           </div>
 
@@ -867,11 +893,17 @@ export default function BKashManager({
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-pink-650 hover:bg-pink-600 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg shadow-pink-650/15 transition cursor-pointer flex items-center justify-center space-x-1"
+                disabled={isSubmitting}
+                className="w-full py-2.5 bg-pink-650 hover:bg-pink-600 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-lg shadow-pink-650/15 transition cursor-pointer flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Check className="w-4 h-4" />
-                <span>সব খরচ একসাথে সেভ করুন</span>
+                <span>{isSubmitting ? 'সংরক্ষণ হচ্ছে...' : 'সব খরচ একসাথে সেভ করুন'}</span>
               </button>
+              {submitError && (
+                <div className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] rounded-xl p-2.5 font-medium">
+                  {submitError}
+                </div>
+              )}
 
             </form>
           </div>

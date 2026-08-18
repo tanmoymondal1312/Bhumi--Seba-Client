@@ -881,6 +881,7 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
     role: string;
     avatar: string;
     phone: string;
+    monthlySalary?: number | null;
   }
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -893,12 +894,14 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
   const [newRole, setNewRole] = useState<'OWNER_TWO' | 'STAFF'>('STAFF');
   const [newPin, setNewPin] = useState('');
   const [newPhone, setNewPhone] = useState('');
+  const [newSalary, setNewSalary] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editRole, setEditRole] = useState<'OWNER_TWO' | 'STAFF'>('STAFF');
   const [editPin, setEditPin] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editSalary, setEditSalary] = useState('');
 
   useEffect(() => {
     loadUsers();
@@ -938,11 +941,13 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
         role: newRole,
         pin: newPin.trim(),
         phone: newPhone.trim() || undefined,
+        monthlySalary: newRole === 'STAFF' && newSalary.trim() !== '' ? Number(newSalary) : null,
       });
       setUsers(prev => [...prev, created]);
       setNewName('');
       setNewPin('');
       setNewPhone('');
+      setNewSalary('');
       setShowAddForm(false);
       showMsg(`"${created.name}" সফলভাবে যুক্ত করা হয়েছে!`);
     } catch (err: any) {
@@ -956,6 +961,7 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
     setEditRole(user.role as 'OWNER_TWO' | 'STAFF');
     setEditPin('');
     setEditPhone(user.phone || '');
+    setEditSalary(user.monthlySalary != null ? String(user.monthlySalary) : '');
   };
 
   const handleUpdateUser = async () => {
@@ -972,6 +978,9 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
       };
       if (editPin.trim()) {
         updateData.pin = editPin.trim();
+      }
+      if (editRole === 'STAFF' && editSalary.trim() !== '') {
+        updateData.monthlySalary = Number(editSalary);
       }
 
       const updated = await api.users.update(editingId, updateData);
@@ -1093,6 +1102,20 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
                           />
                         </div>
                       </div>
+                      {editRole === 'STAFF' && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400 font-bold">মাসিক বেতন (৳) <span className="text-slate-600">(খালি রাখলে অপরিবর্তিত)</span></label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={editSalary}
+                            onChange={(e) => setEditSalary(e.target.value)}
+                            placeholder="যেমন: 8000"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1.5 px-2.5 text-white text-xs focus:outline-none focus:border-indigo-500"
+                          />
+                          <p className="text-[9px] text-slate-600">নতুন হিসাব চক্রে এই বেতন ডিফল্ট হিসেবে ব্যবহৃত হবে।</p>
+                        </div>
+                      )}
                       <div className="flex items-center space-x-2 justify-end">
                         <button
                           type="button"
@@ -1129,6 +1152,11 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
                               {getRoleBangla(user.role)}
                             </span>
                             {user.phone && <span className="text-[9px] text-slate-500 font-mono">{user.phone}</span>}
+                            {user.role === 'STAFF' && user.monthlySalary != null && user.monthlySalary > 0 && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-400 font-sans">
+                                বেতন: ৳{user.monthlySalary.toLocaleString('bn-BD')}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1220,6 +1248,21 @@ function UserManagementPanel({ canManage = true }: { canManage?: boolean }) {
                     className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs focus:outline-none focus:border-indigo-500"
                   />
                 </div>
+
+                {newRole === 'STAFF' && (
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] text-slate-400 font-bold">মাসিক বেতন (৳) <span className="text-slate-600">(ঐচ্ছিক)</span></label>
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="যেমন: 8000"
+                      value={newSalary}
+                      onChange={(e) => setNewSalary(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-820 rounded-xl py-1.5 px-3 text-white text-xs focus:outline-none focus:border-indigo-500"
+                    />
+                    <p className="text-[9px] text-slate-600">নতুন হিসাব চক্রে ডিফল্ট বেতন হিসেবে ব্যবহৃত হবে। বেতন ব্যবস্থাপনা ট্যাব থেকে প্রতি চক্রে পরিবর্তন করা যাবে।</p>
+                  </div>
+                )}
 
                 <button
                   type="submit"
