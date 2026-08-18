@@ -759,10 +759,6 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
 (এর মধ্যে ক্যাশ-আউট পেমেন্ট: ৳${activeMonthReport.totalBkashOut.toLocaleString('bn-BD')}, সরকারি ফি: ৳${activeMonthReport.totalBkashPayment.toLocaleString('bn-BD')})
 মোট বিকাশ লেনদেন সংখ্যা: ${activeMonthReport.bkashItemsCount} টি ভাউচার
 
-৪. বিস্তারিত সেবা খাতভিত্তিক আয় (Service-wise Revenue)
--------------------------------------------------------
-${activeMonthReport.servicesReport.map((svc, idx) => `${idx + 1}. ${svc.bangla}: ৳${svc.sum.toLocaleString('bn-BD')} (${svc.count} টি আবেদন)`).join('\n')}
-
 =======================================================
        * এই হিসাবপত্রটি একটি ডিজিটাল সিস্টেম জেনারেটেড বিবরণী *
 =======================================================`;
