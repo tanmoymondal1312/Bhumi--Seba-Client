@@ -148,19 +148,19 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         <div className="text-slate-500 text-[11px] font-medium tracking-wide">
           ভূমি সেবা সহায়তা কেন্দ্র © ২০২৬
         </div>
-        <p className="text-[21px] font-black text-slate-300 tracking-tight">Powered by Prime Network</p>
+        <p className="text-sm font-bold text-slate-400 tracking-tight">Powered by Prime Network</p>
         <a
           href="https://mediaghor.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center space-x-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition group"
+          className="inline-flex items-center space-x-1.5 text-xs text-slate-400 transition"
         >
           <img
             src="/mediaghor-icon.png"
             alt="Mediaghor"
-            className="w-3.5 h-3.5 rounded-sm opacity-40 group-hover:opacity-80 transition"
+            className="w-4 h-4 rounded-sm opacity-70 transition"
           />
-          <span>Made with <strong className="text-slate-500 group-hover:text-slate-300">Mediaghor</strong></span>
+          <span>Made with <strong className="text-slate-300">Mediaghor</strong></span>
         </a>
       </div>
     </div>
