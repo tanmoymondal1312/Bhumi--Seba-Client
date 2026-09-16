@@ -153,14 +153,13 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           href="https://mediaghor.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center space-x-1.5 text-[10px] text-slate-600 hover:text-slate-400 transition group"
+          className="inline-block transition opacity-40 hover:opacity-80"
         >
           <img
-            src="/mediaghor-icon.png"
-            alt="Mediaghor"
-            className="w-3.5 h-3.5 rounded-sm opacity-40 group-hover:opacity-80 transition"
+            src="https://image-share.mediaghor.com/s/j4dg"
+            alt="Made with Mediaghor"
+            className="h-6 mx-auto"
           />
-          <span>Made with <strong className="text-slate-500 group-hover:text-slate-300">Mediaghor</strong></span>
         </a>
       </div>
     </div>

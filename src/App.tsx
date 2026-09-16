@@ -845,14 +845,13 @@ export default function App() {
           href="https://mediaghor.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center space-x-2 text-xs text-slate-500 hover:text-slate-300 transition group"
+          className="inline-block transition opacity-60 hover:opacity-100"
         >
           <img
-            src="/mediaghor-icon.png"
-            alt="Mediaghor"
-            className="w-4 h-4 rounded-sm opacity-50 group-hover:opacity-100 transition"
+            src="https://image-share.mediaghor.com/s/j4dg"
+            alt="Made with Mediaghor"
+            className="h-8 mx-auto"
           />
-          <span>Made with <strong className="text-slate-400 group-hover:text-slate-200">Mediaghor</strong></span>
         </a>
       </div>
 
