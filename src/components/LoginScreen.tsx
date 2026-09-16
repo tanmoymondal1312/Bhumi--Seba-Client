@@ -156,7 +156,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
           className="inline-block transition opacity-40 hover:opacity-80"
         >
           <img
-            src="https://image-share.mediaghor.com/s/j4dg"
+            src="/mediaghor-badge.png"
             alt="Made with Mediaghor"
             className="h-6 mx-auto"
           />

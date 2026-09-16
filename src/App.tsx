@@ -848,7 +848,7 @@ export default function App() {
           className="inline-block transition opacity-60 hover:opacity-100"
         >
           <img
-            src="https://image-share.mediaghor.com/s/j4dg"
+            src="/mediaghor-badge.png"
             alt="Made with Mediaghor"
             className="h-8 mx-auto"
           />
