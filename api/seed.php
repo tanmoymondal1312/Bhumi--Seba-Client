@@ -69,7 +69,7 @@ $pdo->exec("CREATE TABLE services_metadata (
 )");
 
 // ── Users ─────────────────────────────────────────────────────────────────────
-$pdo->prepare("INSERT INTO users VALUES ('owner1','মোঃ রনি','OWNER_ONE',?,''  ,'01712-345678',datetime('now'))")
+$pdo->prepare("INSERT INTO users VALUES ('owner1','Rejanur','OWNER_ONE',?,''  ,'01712-345678',datetime('now'))")
     ->execute([password_hash('9999', PASSWORD_BCRYPT)]);
 $pdo->prepare("INSERT INTO users VALUES ('user-staff1','করিম উদ্দিন','STAFF',?,'','01823-456789',datetime('now'))")
     ->execute([password_hash('1234', PASSWORD_BCRYPT)]);

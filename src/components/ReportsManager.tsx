@@ -572,17 +572,6 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
   .info-item .k { color:#64748b; font-weight:500; }
   .info-item .v { font-weight:700; color:#0f172a; }
 
-  .bkash-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:10px; }
-  .bk-card { padding:16px; border-radius:10px; text-align:center; }
-  .bk-card.in { background:#ecfdf5; border:1px solid #a7f3d0; }
-  .bk-card.out { background:#fef2f2; border:1px solid #fecaca; }
-  .bk-card.count { background:#eff6ff; border:1px solid #bfdbfe; }
-  .bk-card .bk-label { font-size:11px; color:#64748b; font-weight:600; margin-bottom:4px; }
-  .bk-card .bk-val { font-size:20px; font-weight:800; }
-  .bk-card.in .bk-val { color:#059669; }
-  .bk-card.out .bk-val { color:#dc2626; }
-  .bk-card.count .bk-val { color:#2563eb; }
-
   .footer { margin-top:40px; padding-top:20px; border-top:2px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#94a3b8; }
   .footer-left { max-width:60%; }
   .footer-seal { width:60px; height:60px; border:2px solid #cbd5e1; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:8px; color:#94a3b8; text-align:center; font-weight:700; line-height:1.2; }
@@ -691,18 +680,6 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
       </table>
     </div>
 
-    <div class="section">
-      <div class="section-header">
-        <div class="section-num">৪</div>
-        <div class="section-title">বিকাশ লেনদেন সারসংক্ষেপ</div>
-      </div>
-      <div class="bkash-grid">
-        <div class="bk-card in"><div class="bk-label">বিকাশ ক্যাশ-ইন</div><div class="bk-val">৳${r.totalBkashIn.toLocaleString()}</div></div>
-        <div class="bk-card out"><div class="bk-label">বিকাশ মোট ব্যয়</div><div class="bk-val">৳${r.totalBkashSpent.toLocaleString()}</div></div>
-        <div class="bk-card count"><div class="bk-label">মোট লেনদেন</div><div class="bk-val">${r.bkashItemsCount} টি</div></div>
-      </div>
-    </div>
-
     <div class="footer">
       <div class="footer-left">
         এই আর্থিক প্রতিবেদনটি <strong>ভূমি সেবা সহায়তা কেন্দ্র</strong> সফটওয়্যার সিস্টেম দ্বারা স্বয়ংক্রিয়ভাবে তৈরি হয়েছে।<br/>
@@ -751,13 +728,6 @@ export default function ReportsManager({ incomeList, expenseList, bkashList = []
 দৈনিক ফিক্সড পরিচালন খরচ (দৈনিক গড়): ৳${activeMonthReport.dailyFixedLoss.toLocaleString('bn-BD')}
 দোকান বন্ধ থাকার কারণে আনুমানিক মোট সিস্টেম লস: ৳${activeMonthReport.totalClosedDaysLoss.toLocaleString('bn-BD')}
 খোলা দিনে দৈনিক গড় ইনকাম: ৳${activeMonthReport.averageIncomePerOpenDay.toLocaleString('bn-BD')}
-
-৩. বিকাশ ফিনান্স লেনদেন হিসাব (bKash Financial Audit)
--------------------------------------------------------
-বিকাশ মোট ক্যাশ এন্ট্রি (In/Load): ৳${activeMonthReport.totalBkashIn.toLocaleString('bn-BD')}
-বিকাশ মোট খরচ/পেমেন্ট (Spent/Out): ৳${activeMonthReport.totalBkashSpent.toLocaleString('bn-BD')}
-(এর মধ্যে ক্যাশ-আউট পেমেন্ট: ৳${activeMonthReport.totalBkashOut.toLocaleString('bn-BD')}, সরকারি ফি: ৳${activeMonthReport.totalBkashPayment.toLocaleString('bn-BD')})
-মোট বিকাশ লেনদেন সংখ্যা: ${activeMonthReport.bkashItemsCount} টি ভাউচার
 
 =======================================================
        * এই হিসাবপত্রটি একটি ডিজিটাল সিস্টেম জেনারেটেড বিবরণী *

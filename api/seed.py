@@ -73,7 +73,7 @@ HASH_1234 = '$2a$10$vUhQ66RRq5sbXXk/IOvw5OQH8zjz9HRQnwmMcDYPTzhzUx9KiAHda'
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 db.executemany("INSERT INTO users VALUES (?,?,?,?,?,?,datetime('now'))", [
-    ('owner1',      'মোঃ রনি',       'OWNER_ONE', HASH_9999, '', '01712-345678'),
+    ('owner1',      'Rejanur',       'OWNER_ONE', HASH_9999, '', '01712-345678'),
     ('user-staff1', 'করিম উদ্দিন',   'STAFF',     HASH_1234, '', '01823-456789'),
 ])
 

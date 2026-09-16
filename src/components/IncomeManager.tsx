@@ -276,6 +276,24 @@ export default function IncomeManager({
     return matchesService && matchesSearch;
   });
 
+  // Service types that actually have records in the selected period
+  const servicesInPeriod = useMemo(() => {
+    const set = new Set<string>();
+    incomeList.forEach(item => {
+      if (item.date && item.date.length >= 10 && getAccountingPeriodForDate(item.date) === registerPeriod) {
+        set.add(item.serviceType);
+      }
+    });
+    return Array.from(set);
+  }, [incomeList, registerPeriod]);
+
+  // Reset service filter when period changes and selected service is not available
+  useEffect(() => {
+    if (filterService !== 'ALL' && !servicesInPeriod.includes(filterService)) {
+      setFilterService('ALL');
+    }
+  }, [servicesInPeriod, filterService]);
+
   const totalFilteredIncome = filteredList.reduce((sum, item) => sum + item.amount, 0);
 
   const dailyMetrics = getDailyIncomeMetrics(todayStr, incomeList);
@@ -651,11 +669,15 @@ export default function IncomeManager({
               className="bg-slate-950 border border-slate-850 rounded-xl py-1.5 px-3 text-slate-300 text-xs cursor-pointer focus:outline-none focus:border-emerald-500/60 font-medium"
             >
               <option value="ALL">সব সার্ভিস একসাথে ফিল্টার</option>
-              {activeServiceTypes.map(s => (
-                <option key={s} value={s}>
-                  {SERVICE_METADATA[s]?.bangla || s}
-                </option>
-              ))}
+              {servicesInPeriod.length === 0 ? (
+                <option value="ALL" disabled>এই চক্রে কোনো সার্ভিস নেই</option>
+              ) : (
+                servicesInPeriod.map(s => (
+                  <option key={s} value={s}>
+                    {SERVICE_METADATA[s]?.bangla || s}
+                  </option>
+                ))
+              )}
             </select>
 
             {/* Accounting period selector — register shows the selected হিসাব চক্র */}
@@ -695,7 +717,10 @@ export default function IncomeManager({
                 {filteredList.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-xs text-slate-500 italic">
-                      খুঁজে পাওয়া যায়নি! কোনো আয় রেকর্ড যুক্ত নেই।
+                      {registerPeriod === currentPeriod 
+                        ? 'এই চক্রে এখনো কোনো সার্ভিস আয় রেকর্ড করা হয়নি।'
+                        : 'এই চক্রে কোনো আয় রেকর্ড পাওয়া যায়নি।'
+                      }
                     </td>
                   </tr>
                 ) : (

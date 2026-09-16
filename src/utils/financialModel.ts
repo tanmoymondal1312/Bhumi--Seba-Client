@@ -123,20 +123,20 @@ export function computePeriodSummary(input: FinancialModelInput): FinancialModel
     }
   });
 
-  const operatingExpense = totalExpense - recordedFixedExpense;
-  const totalProfit = totalRevenue - (operatingExpense + fixedExpense);
+  const variableExpense = totalExpense - recordedFixedExpense;
+  const totalProfit = totalRevenue - totalExpense - (fixedExpense - recordedFixedExpense);
 
   return {
     totalRevenue,
     totalExpense,
-    operatingExpense,
+    operatingExpense: variableExpense,
     fixedExpense,
     recordedFixedExpense,
     totalProfit,
     salaryActive,
     salaryObligation,
     fixedBreakdown,
-    extraVariableExpense: operatingExpense,
+    extraVariableExpense: variableExpense,
     periodIncomes,
     periodExpenses,
     incomeCount: periodIncomes.length,
